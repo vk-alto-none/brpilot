@@ -46,39 +46,51 @@ class DGPLJevPilotEvaluator:
         rows_dict = candidates_table.get("rows", {}) if isinstance(candidates_table, dict) else {}
         conflicts_dict = candidates_table.get("conflicts", {}) if isinstance(candidates_table, dict) else {}
         
-        props = {
-            "velocity_mps": 10.0,
-            "route_progress_m": 10.0,
-            "route_error_m": 0.0,
-            "lane_error_m": 0.0,
-            "heading_error_deg": 0.0,
-            "on_road": candidates_table.get("all_on_road", True) if isinstance(candidates_table, dict) else True,
-            "in_lane": candidates_table.get("all_in_lane", True) if isinstance(candidates_table, dict) else True,
-            "stop_at_line": False,
-            "crosses_stop_line": False,
-            "collision": cid in conflicts_dict
-        }
+        raw = {}
         if isinstance(shared_props, dict):
-            props.update(shared_props)
-        
+            raw.update(shared_props)
+            
         if isinstance(rows_dict, dict) and cid in rows_dict:
             row_vals = rows_dict[cid]
             if isinstance(row_vals, (list, tuple)):
                 for col_name, val in zip(varying_cols, row_vals):
                     if val is not None:
-                        props[col_name] = val
+                        raw[col_name] = val
         elif isinstance(rows_dict, (list, tuple)):
             try:
-                idx = int(cid.replace("v", ""))
+                idx = int(str(cid).replace("v", ""))
                 if idx < len(rows_dict):
                     row_vals = rows_dict[idx]
                     for col_name, val in zip(varying_cols, row_vals):
                         if val is not None:
-                            props[col_name] = val
+                            raw[col_name] = val
             except Exception:
                 pass
-                
-        return props
+
+        # Normalize properties across all possible JevPilot table schemas
+        vel = raw.get("speed", raw.get("velocity_mps", raw.get("velocity", 12.0)))
+        progress = raw.get("progress", raw.get("route_progress_m", raw.get("route_progress", 10.0)))
+        route_err = raw.get("route_error", raw.get("route_error_m", raw.get("route_err", 0.0)))
+        lane_err = raw.get("lane_error", raw.get("lane_error_m", raw.get("lane_err", 0.0)))
+        heading_err = raw.get("heading_error", raw.get("heading_error_deg", raw.get("heading_err", 0.0)))
+        on_road = raw.get("on_road", candidates_table.get("all_on_road", True) if isinstance(candidates_table, dict) else True)
+        in_lane = raw.get("in_lane", candidates_table.get("all_in_lane", True) if isinstance(candidates_table, dict) else True)
+        stop_at_line = raw.get("stop_at_line", False)
+        crosses_line = raw.get("crosses_line", raw.get("crosses_stop_line", False))
+        collision = cid in conflicts_dict or raw.get("collision_predicted", False)
+
+        return {
+            "velocity_mps": float(vel) if vel is not None else 12.0,
+            "route_progress_m": float(progress) if progress is not None else 10.0,
+            "route_error_m": abs(float(route_err)) if route_err is not None else 0.0,
+            "lane_error_m": abs(float(lane_err)) if lane_err is not None else 0.0,
+            "heading_error_deg": abs(float(heading_err)) if heading_err is not None else 0.0,
+            "on_road": bool(on_road),
+            "in_lane": bool(in_lane),
+            "stop_at_line": bool(stop_at_line),
+            "crosses_line": bool(crosses_line),
+            "collision": bool(collision)
+        }
 
     def evaluate_candidates(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -130,12 +142,12 @@ class DGPLJevPilotEvaluator:
                         s = 40.0 if cid_l == "drive" else -40.0
                     scores.append(s)
             else:
-                # 2. Vector / Trajectory Decision (Unpack real properties from state.candidates)
+                # 2. Vector / Trajectory Decision (Normalized properties across all candidate schemas)
                 for cid in candidate_ids:
                     props = self.extract_candidate_props(state, cid)
                     
                     if is_red_or_stop_required:
-                        if props.get("stop_at_line") or "stop" in cid.lower():
+                        if props["stop_at_line"] or "stop" in cid.lower():
                             score = 50.0 # Top priority: hold stop at red light
                         else:
                             score = -60.0 # Do NOT cross red light
@@ -144,33 +156,27 @@ class DGPLJevPilotEvaluator:
                         
                     # Driving on clear road
                     score = 25.0
-                    if props.get("collision") or (props.get("collision_predicted", False) and float(props.get("velocity_mps", 0.0) or 0.0) > 0):
-                        score -= 120.0 # Collision prevention
-                    if not props.get("on_road", True):
-                        score -= 80.0 # Road containment
-                    if not props.get("in_lane", True):
+                    if props["collision"]:
+                        score -= 150.0 # Strict collision prevention
+                    if not props["on_road"]:
+                        score -= 90.0 # Strict road containment
+                    if not props["in_lane"]:
                         score -= 30.0 # Stay in lane
                         
-                    route_err = abs(float(props.get("route_error_m", 0.0) or 0.0))
-                    lane_err = abs(float(props.get("lane_error_m", 0.0) or 0.0))
-                    heading_err = abs(float(props.get("heading_error_deg", 0.0) or 0.0))
-                    progress = float(props.get("route_progress_m", 10.0) or 10.0)
-                    vel = float(props.get("velocity_mps", 10.0) or 10.0)
+                    score -= (props["route_error_m"] * 10.0)
+                    score -= (props["lane_error_m"] * 8.0)
+                    score -= (props["heading_error_deg"] * 0.25)
+                    score += (props["route_progress_m"] * 1.5)
+                    score += (props["velocity_mps"] * 0.4)
                     
-                    score -= (route_err * 8.0)
-                    score -= (lane_err * 6.0)
-                    score -= (heading_err * 0.2)
-                    score += (progress * 1.2)
-                    score += (vel * 0.3)
-                    
-                    if props.get("stop_at_line") and is_green_or_clear:
-                        score -= 50.0
+                    if props["stop_at_line"] and is_green_or_clear:
+                        score -= 60.0
                         
                     scores.append(score)
                     
-            # Calibrated Softmax (T = 0.35 -> Top choice gets 95-99%, sub-optimal paths get 0-4%)
+            # Sharp Softmax Calibration (T = 0.25 -> Top choice gets 98-100%, sub-optimal paths get 0-2%)
             scores_tensor = torch.tensor(scores, dtype=torch.float32)
-            scaled_scores = (scores_tensor - scores_tensor.max()) / 0.35
+            scaled_scores = (scores_tensor - scores_tensor.max()) / 0.25
             probs = torch.softmax(scaled_scores, dim=0).tolist()
             
             best_idx = int(torch.argmax(scores_tensor).item())
@@ -234,8 +240,8 @@ class DGPLJevHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 def run_server():
+    socketserver.TCPServer.allow_reuse_address = True
     server = socketserver.TCPServer(("127.0.0.1", PORT), DGPLJevHandler)
-    server.allow_reuse_address = True
     print(f"⚡ DGPL System-1 Local JevPilot Decision Server running at http://127.0.0.1:{PORT}/v1/systemone")
     server.serve_forever()
 
