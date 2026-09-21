@@ -75,25 +75,18 @@ export async function evaluate(state, env, signal, onUsage) {
   const apiCall = Object.keys(requestQuestions).length > 0;
   let data = { answers: {}, usage: { input_tokens: 0, output_tokens: 0 } };
   if (apiCall) {
-    const res = await fetch("https://api.typesafe.ai/v1/systemone", {
+    const localEndpoint = env.DGPL_ENDPOINT || "http://127.0.0.1:8890/v1/systemone";
+    const res = await fetch(localEndpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.TYPESAFE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body,
       signal: signal || AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      const error = new Error(
-        res.status === 401
-          ? "Jev rejected the API key. Update TYPESAFE_API_KEY in .env."
-          : res.status === 429
-            ? "Jev rate limit reached. Pausing before retry."
-            : `Jev API returned HTTP ${res.status}.`,
-      );
+      const error = new Error(`DGPL System-1 API returned HTTP ${res.status}.`);
       error.status = res.status;
-      error.billable = res.status >= 500;
       throw error;
     }
     data = await res.json();
@@ -166,20 +159,16 @@ export function jevMiddleware(env) {
     if (path === "/api/status" && req.method === "GET")
       return send(200, {
         auth_required: false,
-        authenticated: false,
-        configured: !!env.TYPESAFE_API_KEY,
-        model: "jev-latest",
+        authenticated: true,
+        configured: true,
+        model: "dgpl-system1-v2.0",
         pricing: {
-          input_per_million: Number(env.JEV_INPUT_PRICE ?? 0.042),
-          output_per_million: Number(env.JEV_OUTPUT_PRICE ?? 0),
+          input_per_million: 0.0,
+          output_per_million: 0.0,
         },
       });
     if (path !== "/api/decide" || req.method !== "POST")
       return send(404, { error: "Not found" });
-    if (!env.TYPESAFE_API_KEY)
-      return send(503, {
-        error: "Set TYPESAFE_API_KEY in .env and restart the server.",
-      });
     if (
       req.headers.origin &&
       req.headers.origin !== `http://${req.headers.host}` &&
