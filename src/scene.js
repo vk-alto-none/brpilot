@@ -276,12 +276,29 @@ export class DriveScene {
     this.mode = "chase";
     this.cameraInput = new CameraInput(canvas, () => this.mode);
     this.showSensors = false;
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: renderProfile.antialias,
-      alpha: false,
-      powerPreference: "high-performance",
-    });
+    let rendererInstance = null;
+    const createGL = (opts) => new THREE.WebGLRenderer({ canvas, ...opts });
+    try {
+      rendererInstance = createGL({
+        antialias: renderProfile.antialias,
+        alpha: false,
+        powerPreference: "default",
+        failIfMajorPerformanceCaveat: false,
+      });
+    } catch (e1) {
+      try {
+        rendererInstance = createGL({
+          antialias: false,
+          alpha: false,
+          powerPreference: "default",
+          failIfMajorPerformanceCaveat: false,
+        });
+      } catch (e2) {
+        console.warn("⚠️ Fallback WebGL initialization:", e2);
+        rendererInstance = createGL({ canvas });
+      }
+    }
+    this.renderer = rendererInstance;
     this.renderer.setPixelRatio(
       Math.min(devicePixelRatio, renderProfile.pixelRatio),
     );
