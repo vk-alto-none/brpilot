@@ -25,6 +25,7 @@ import {
   Grip,
   Github,
   LogOut,
+  Zap,
 } from "lucide";
 import { Simulation } from "./simulation.js";
 import { BackgroundPlanner } from "./background-planner.js";
@@ -67,6 +68,7 @@ const icons = {
   Grip,
   Github,
   LogOut,
+  Zap,
 };
 const icon = (name) => `<i data-lucide="${name}"></i>`,
   $ = (id) => document.getElementById(id);
@@ -117,7 +119,7 @@ $("app").innerHTML = `
 <div id="minimap" class="minimap glass"><div class="minimap-toolbar" role="toolbar" aria-label="Minimap controls"><button id="map-drag" aria-label="Move minimap" title="Move minimap · drag or use arrow keys">${icon("grip")}</button><div><button id="map-zoom-out" aria-label="Zoom out" title="Zoom out">${icon("minus")}</button><button id="map-zoom-in" aria-label="Zoom in" title="Zoom in">${icon("plus")}</button><button id="map-reset" aria-label="Reset minimap" title="Reset map position, zoom and following">${icon("rotate-ccw")}</button></div></div><canvas id="map-canvas" width="380" height="310" aria-label="Route map. Drag to pan, scroll to zoom, double-click to follow the car."></canvas></div></div>
 <div id="paused-overlay" hidden><div class="glass"><span>${icon("pause")} Paused</span><button id="resume" class="primary">Resume driving</button></div></div>
 <div id="arrival" class="arrival glass" hidden><span class="arrival-mark">${icon("flag")}</span><span class="eyebrow">DESTINATION REACHED</span><h1>You made it.</h1><p id="arrival-summary"></p><button id="next-trip" class="primary">Next drive ${icon("arrow-up-right")}</button><button id="keep-driving" class="subtle">Keep exploring</button></div>
-<div class="bottom-hud"><div class="driver-dock glass"><div class="speed-cluster"><div title="Current speed"><strong id="speed">0</strong><span>km/h</span></div><span class="speed-limit" title="Speed limit"><small>LIMIT</small><b id="speed-limit">50</b></span></div><span class="dock-divider"></span><div class="pilot-actions"><button id="autopilot" class="pilot-button" role="switch" aria-checked="false" aria-label="Jev autopilot" title="Engage Jev · J">${icon("sparkles")}<span id="pilot-label">Engage Jev</span><kbd>J</kbd></button><button id="candidates-toggle" class="candidate-button" aria-label="Show steering candidates" aria-pressed="false" title="Show steering candidates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V3m-3 3 3-3 3 3M12 20C12 14 7 12 3 8m0 3V8h3M12 20c0-6 5-8 9-12m-3 0h3v3"/><circle cx="12" cy="21" r="1" fill="currentColor" stroke="none"/></svg></button></div><div id="decision-status"><span id="pilot-state">Free play</span><span id="context-message">WASD to drive · Space to brake</span><span class="cost-total" title="Estimated cost from Jev-reported token usage and configured pricing."><span id="cost-label">Session</span> <strong id="cost">$0.000000</strong></span></div><span class="dock-divider"></span><div class="dock-tools" role="group" aria-label="View and driving controls"><button id="camera" title="Change camera · C" aria-label="Change camera">${icon("video")}<span id="camera-name">Chase</span></button><button id="scene-json" aria-label="Inspect live JSON" title="Inspect live JSON">${icon("braces")}</button><button id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icon("maximize")}</button><span class="divider"></span><button id="pause" aria-label="Pause simulation" title="Pause · P">${icon("pause")}</button><button id="sign-out" hidden aria-label="Sign out" title="Sign out">${icon("log-out")}</button></div></div></div>
+<div class="bottom-hud"><div class="driver-dock glass"><div class="speed-cluster"><div title="Current speed"><strong id="speed">0</strong><span>km/h</span></div><span class="speed-limit" title="Speed limit"><small>LIMIT</small><b id="speed-limit">50</b></span></div><span class="dock-divider"></span><div class="pilot-actions"><button id="autopilot" class="pilot-button" role="switch" aria-checked="false" aria-label="Jev autopilot" title="Engage Jev · J">${icon("sparkles")}<span id="pilot-label">Engage Jev</span><kbd>J</kbd></button><button id="rush-toggle" class="rush-button" role="switch" aria-checked="false" aria-label="Toggle Rush Super Driver Mode" title="Rush Super Driver Mode · R">${icon("zap")}<span id="rush-label">Rush Mode</span><kbd>R</kbd></button><button id="candidates-toggle" class="candidate-button" aria-label="Show steering candidates" aria-pressed="false" title="Show steering candidates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V3m-3 3 3-3 3 3M12 20C12 14 7 12 3 8m0 3V8h3M12 20c0-6 5-8 9-12m-3 0h3v3"/><circle cx="12" cy="21" r="1" fill="currentColor" stroke="none"/></svg></button></div><div id="decision-status"><span id="pilot-state">Free play</span><span id="context-message">WASD to drive · Space to brake</span><span class="cost-total" title="Estimated cost from Jev-reported token usage and configured pricing."><span id="cost-label">Session</span> <strong id="cost">$0.000000</strong></span></div><span class="dock-divider"></span><div class="dock-tools" role="group" aria-label="View and driving controls"><button id="camera" title="Change camera · C" aria-label="Change camera">${icon("video")}<span id="camera-name">Chase</span></button><button id="scene-json" aria-label="Inspect live JSON" title="Inspect live JSON">${icon("braces")}</button><button id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icon("maximize")}</button><span class="divider"></span><button id="pause" aria-label="Pause simulation" title="Pause · P">${icon("pause")}</button><button id="sign-out" hidden aria-label="Sign out" title="Sign out">${icon("log-out")}</button></div></div></div>
 <dialog id="crash-dialog" aria-labelledby="crash-title" aria-describedby="crash-description"><span class="crash-symbol">${icon("x")}</span><span class="eyebrow">DRIVE ENDED</span><h1 id="crash-title">Game over.</h1><p id="crash-description"></p><div class="crash-stats"><div><strong id="crash-speed"></strong><span>km/h at impact</span></div><div><strong id="crash-distance"></strong><span>meters driven</span></div></div><button id="retry-drive" class="primary">${icon("rotate-ccw")} Restart drive</button><button id="crash-new-world" class="secondary">Try a new world ${icon("arrow-up-right")}</button></dialog>
 <dialog id="credit-dialog" aria-labelledby="credit-title"><span class="eyebrow">THANKS FOR TAKING A DRIVE</span><h2 id="credit-title">That's your free lap.</h2><p>Your $0.25 of Jev play credit has been used. You can keep exploring with manual controls.</p><button id="credit-close" class="primary">Keep driving manually</button><a href="https://standardagents.ai/" target="_blank" rel="noopener noreferrer">Explore Standard Agents ↗</a></dialog>
 <div id="toast" role="status" hidden></div>
@@ -180,6 +182,8 @@ async function refreshPlan() {
       if (token !== generation || version !== sim.routeVersion || sim.crash)
         return null;
       sim.lastPlan = result.plan;
+      result.state.rush_mode = rushMode;
+      result.state.driver_profile = rushMode ? "super_driver" : "standard";
       sim.lastDecisionState = result.state;
       sim.routeChoices = result.routeChoices;
       sim.routeChoicesOrigin = result.routeChoicesOrigin;
@@ -370,6 +374,29 @@ function togglePause() {
   );
   createIcons({ icons });
 }
+let rushMode = false;
+function toggleRushMode() {
+  rushMode = !rushMode;
+  sim.rush_mode = rushMode;
+  const rushBtn = $("rush-toggle");
+  if (rushBtn) {
+    rushBtn.setAttribute("aria-checked", String(rushMode));
+    rushBtn.classList.toggle("active", rushMode);
+    $("rush-label").textContent = rushMode ? "Super Driver" : "Rush Mode";
+    const label = `${rushMode ? "Super Driver ON (100% Safe Overtake)" : "Rush Super Driver Mode"} · R`;
+    rushBtn.setAttribute("aria-label", label);
+    tooltips.set(rushBtn, label);
+  }
+  if (sim.autopilot) {
+    $("pilot-state").textContent = rushMode ? "⚡ Super Driver" : "Autopilot";
+  }
+  toast(
+    rushMode
+      ? "⚡ Super Driver Active — High-Speed Safe Overtaking ON"
+      : "🛡️ Standard Safe Autopilot Active",
+  );
+}
+$("rush-toggle").onclick = toggleRushMode;
 $("autopilot").onclick = () => setPilot(!sim.autopilot);
 let showCandidates = false,
   candidatePreviewAt = 0;
@@ -453,6 +480,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.repeat) return;
   if (e.code === "KeyJ") setPilot(!sim.autopilot);
+  if (e.code === "KeyR") toggleRushMode();
   if (e.code === "KeyC") changeCamera();
   if (e.code === "KeyP") togglePause();
   if (e.key === "?") {

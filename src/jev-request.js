@@ -117,6 +117,8 @@ export function prepareJevRequest(full) {
       (nearby.length ? " Traffic heading:0=same direction,180=oncoming." : ""),
     speed: rounded(full.speed_mps),
     limit: rounded(full.limit_mps),
+    rush_mode: Boolean(full.rush_mode),
+    driver_profile: full.rush_mode ? "super_driver" : "standard",
     nav: {
       turn: full.turn.direction,
       in_m: rounded(full.turn.in_m),

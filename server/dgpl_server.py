@@ -73,6 +73,8 @@ class DGPLJevPilotEvaluator:
         route_err = raw.get("route_error", raw.get("route_error_m", raw.get("route_err", 0.0)))
         lane_err = raw.get("lane_error", raw.get("lane_error_m", raw.get("lane_err", 0.0)))
         heading_err = raw.get("heading_error", raw.get("heading_error_deg", raw.get("heading_err", 0.0)))
+        end_right = raw.get("end_right", 0.0)
+        end_ahead = raw.get("end_ahead", progress)
         on_road = raw.get("on_road", candidates_table.get("all_on_road", True) if isinstance(candidates_table, dict) else True)
         in_lane = raw.get("in_lane", candidates_table.get("all_in_lane", True) if isinstance(candidates_table, dict) else True)
         stop_at_line = raw.get("stop_at_line", False)
@@ -85,6 +87,8 @@ class DGPLJevPilotEvaluator:
             "route_error_m": abs(float(route_err)) if route_err is not None else 0.0,
             "lane_error_m": abs(float(lane_err)) if lane_err is not None else 0.0,
             "heading_error_deg": abs(float(heading_err)) if heading_err is not None else 0.0,
+            "end_right": float(end_right) if end_right is not None else 0.0,
+            "end_ahead": float(end_ahead) if end_ahead is not None else 10.0,
             "on_road": bool(on_road),
             "in_lane": bool(in_lane),
             "stop_at_line": bool(stop_at_line),
@@ -95,11 +99,14 @@ class DGPLJevPilotEvaluator:
     def evaluate_candidates(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluates JevPilot candidate trajectories and returns calibrated choice probabilities.
-        Enforces red light stopping/waiting and sharp realistic candidate probability distributions.
+        Enforces dual profiles: Standard Safe Cruise vs ⚡ Rush Super Driver Mode (100% Safe Overtaking).
         """
         state = payload.get("state", {})
         questions = payload.get("questions", {})
         answers = {}
+        
+        # Check if Rush / Super Driver Mode is active
+        is_rush = bool(state.get("rush_mode", False)) or state.get("driver_profile") == "super_driver"
         
         # Check if a stop is legally required (Red light, stop line, stop sign, conflict)
         stop_reasons = state.get("stop_reasons", [])
@@ -142,35 +149,79 @@ class DGPLJevPilotEvaluator:
                         s = 40.0 if cid_l == "drive" else -40.0
                     scores.append(s)
             else:
-                # 2. Vector / Trajectory Decision (Normalized properties across all candidate schemas)
+                # Pre-extract properties for all candidates
+                all_props = {cid: self.extract_candidate_props(state, cid) for cid in candidate_ids}
+                
+                # Check baseline/straight candidate velocity (to evaluate overtaking opportunity)
+                straight_vels = [p["velocity_mps"] for p in all_props.values() if abs(p["end_right"]) < 0.5 and not p["collision"]]
+                baseline_straight_vel = max(straight_vels) if straight_vels else 10.0
+                has_slow_traffic_ahead = any(p["collision"] for p in all_props.values() if abs(p["end_right"]) < 0.5) or baseline_straight_vel < 10.0
+                
+                # 2. Vector / Trajectory Decision
                 for cid in candidate_ids:
-                    props = self.extract_candidate_props(state, cid)
+                    props = all_props[cid]
                     
                     if is_red_or_stop_required:
                         if props["stop_at_line"] or "stop" in cid.lower():
-                            score = 50.0 # Top priority: hold stop at red light
+                            score = 50.0 # Top priority: hold stop at red light with 100% certainty
                         else:
-                            score = -60.0 # Do NOT cross red light
+                            score = -80.0 # Do NOT cross red light
                         scores.append(score)
                         continue
                         
-                    # Driving on clear road
-                    score = 25.0
-                    if props["collision"]:
-                        score -= 150.0 # Strict collision prevention
-                    if not props["on_road"]:
-                        score -= 90.0 # Strict road containment
-                    if not props["in_lane"]:
-                        score -= 30.0 # Stay in lane
+                    if is_rush:
+                        # ⚡ RUSH / SUPER DRIVER PROFILE (100% Safe, Dynamic High-Speed Overtaking)
+                        score = 30.0
                         
-                    score -= (props["route_error_m"] * 10.0)
-                    score -= (props["lane_error_m"] * 8.0)
-                    score -= (props["heading_error_deg"] * 0.25)
-                    score += (props["route_progress_m"] * 1.5)
-                    score += (props["velocity_mps"] * 0.4)
-                    
-                    if props["stop_at_line"] and is_green_or_clear:
-                        score -= 60.0
+                        # Absolute Safety Wall (Zero tolerance for collisions or running off-road)
+                        if props["collision"]:
+                            score -= 250.0
+                        if not props["on_road"]:
+                            score -= 150.0
+                            
+                        # Smooth lane adherence (allows passing shifts across lane boundaries)
+                        if not props["in_lane"]:
+                            score -= 10.0
+                            
+                        score -= (props["route_error_m"] * 6.0)
+                        score -= (props["lane_error_m"] * 3.0)
+                        score -= (props["heading_error_deg"] * 0.20)
+                        
+                        # High-efficiency progress & velocity maximization
+                        score += (props["route_progress_m"] * 2.5)
+                        score += (props["velocity_mps"] * 1.8)
+                        
+                        # 🏎️ Super Driver Dynamic Overtaking Bonus:
+                        # If straight path is slow or blocked, but adjacent passing lane is clear, fast, and on-road
+                        is_passing_vector = abs(props["end_right"]) > 0.4
+                        if is_passing_vector and not props["collision"] and props["on_road"]:
+                            if has_slow_traffic_ahead or props["velocity_mps"] >= baseline_straight_vel + 1.2:
+                                score += 45.0 # Decisive, confident overtake
+                                if props["end_right"] < -0.2:
+                                    score += 3.0 # Preferred left passing lane in standard right-hand traffic
+                        elif abs(props["end_right"]) < 0.4 and has_slow_traffic_ahead:
+                            score -= 30.0 # Don't sit passively behind slow lead car
+                            
+                        if props["stop_at_line"] and is_green_or_clear:
+                            score -= 80.0
+                    else:
+                        # 🛡️ STANDARD SAFE CRUISE PROFILE
+                        score = 25.0
+                        if props["collision"]:
+                            score -= 150.0
+                        if not props["on_road"]:
+                            score -= 90.0
+                        if not props["in_lane"]:
+                            score -= 30.0
+                            
+                        score -= (props["route_error_m"] * 10.0)
+                        score -= (props["lane_error_m"] * 8.0)
+                        score -= (props["heading_error_deg"] * 0.25)
+                        score += (props["route_progress_m"] * 1.5)
+                        score += (props["velocity_mps"] * 0.4)
+                        
+                        if props["stop_at_line"] and is_green_or_clear:
+                            score -= 60.0
                         
                     scores.append(score)
                     

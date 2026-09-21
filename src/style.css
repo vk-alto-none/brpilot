@@ -382,6 +382,67 @@ kbd {
   color: #ffffff;
   border-color: #ffffff66;
 }
+.rush-button {
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  background: rgba(23, 26, 32, 0.85);
+  border-radius: 8px;
+  min-height: 41px;
+  padding: 10px 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 7px;
+  color: #ffc107;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+}
+.rush-button svg {
+  width: 16px;
+  height: 16px;
+  color: #ffc107;
+  transition: transform 0.2s ease;
+}
+.rush-button:hover {
+  background: rgba(255, 170, 0, 0.15);
+  border-color: #ffc107;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.25);
+}
+.rush-button kbd {
+  color: #ffc107cc;
+  border-color: #ffc10740;
+}
+.rush-button[aria-checked="true"],
+.rush-button.active {
+  border-color: #ffaa00;
+  background: linear-gradient(135deg, #e67e00 0%, #ffaa00 100%);
+  color: #000000;
+  font-weight: 700;
+  box-shadow: 0 0 18px rgba(255, 170, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: rushPulse 2s infinite ease-in-out;
+}
+.rush-button[aria-checked="true"] svg,
+.rush-button.active svg {
+  color: #000000;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+  transform: scale(1.15);
+}
+.rush-button[aria-checked="true"] kbd,
+.rush-button.active kbd {
+  color: #000000;
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+@keyframes rushPulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(255, 170, 0, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 170, 0, 0.95), 0 0 8px rgba(255, 220, 100, 0.8);
+  }
+}
 #decision-status {
   display: flex;
   flex-direction: column;
