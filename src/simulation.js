@@ -1199,12 +1199,12 @@ export class Simulation {
     // city-junction heuristic mistakes a sweeping ramp for a sharp turn.
     const turnCap = nav.phase
       ? Infinity
-      : Math.abs(nav.heading_error_deg) > 15 ||
+      : Math.abs(nav.heading_error_deg) > 22 ||
           (["left", "right"].includes(nav.next_turn) &&
             nav.turn_distance_m < 24)
         ? nav.next_turn === "right"
-          ? 7
-          : 8
+          ? (this.rush_mode ? 10 : 8.5)
+          : (this.rush_mode ? 11 : 9.5)
         : ["left", "right"].includes(nav.next_turn) && nav.turn_distance_m < 48
           ? 12
           : this.world.theme.limit;

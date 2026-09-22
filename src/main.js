@@ -962,9 +962,12 @@ async function decide() {
     if (now - started > 1800)
       throw Error("Jev decision expired before it arrived. Replanning.");
     if (sim.decisionContextChanged(state)) {
-      // A changed light or a newly completed stop needs another Jev decision.
-      // Keep the previous maneuver briefly instead of inserting a new brake.
-      nextDecision = 0;
+      // Apply controls immediately so the vehicle doesn't stall or freeze steering across the line
+      sim.player.maneuver = state.vectors[data.selection.choice];
+      sim.player.steering = controls.steering;
+      sim.player.target = controls.velocity;
+      scene.vectors.setAnswer(data.selection, plan);
+      nextDecision = performance.now() + 30;
       return;
     }
     if (
