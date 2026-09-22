@@ -329,7 +329,12 @@ function movingCandidates(state) {
   const inLane = safe.filter(([, v]) => v.stays_in_lane);
   const returning = safe.filter(([, v]) => v.returning_to_lane);
   const preferred = isOvertakeActive
-    ? [...safe].sort(([, a], [, b]) => (b.velocity_mps - a.velocity_mps) || (Math.abs(a.steering) - Math.abs(b.steering)))
+    ? [...safe].sort(
+        ([, a], [, b]) =>
+          (b.velocity_mps - a.velocity_mps) ||
+          (Math.abs(b.lane_offset_m ?? 0) - Math.abs(a.lane_offset_m ?? 0)) ||
+          (Math.abs(a.steering) - Math.abs(b.steering)),
+      )
     : state.recovery?.active
       ? safe
       : inLane.length

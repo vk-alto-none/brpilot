@@ -228,6 +228,26 @@ export function createDrivingPlan(
     isOvertake &&
     !isApproachingControlOrDestination &&
     Boolean(passingTarget || (lead && lead.gap < 40));
+
+  if (needsOvertake) {
+    if (!car.activeOvertakeSide) {
+      // Select the safest passing side with available drivable road width
+      const testPointLeft = move(pointAt(car.route.points, near.s + 10), (near.heading ?? car.heading) + Math.PI / 2, -2.8);
+      const leftOccupancy = roadOccupancy({ ...car, ...testPointLeft }, surfaces);
+      const testPointRight = move(pointAt(car.route.points, near.s + 10), (near.heading ?? car.heading) + Math.PI / 2, 2.8);
+      const rightOccupancy = roadOccupancy({ ...car, ...testPointRight }, surfaces);
+      if (leftOccupancy.on_road) {
+        car.activeOvertakeSide = -1; // Default passing side: Left
+      } else if (rightOccupancy.on_road) {
+        car.activeOvertakeSide = 1;  // Right pass
+      } else {
+        car.activeOvertakeSide = -1;
+      }
+    }
+  } else {
+    car.activeOvertakeSide = null;
+  }
+  const overtakeSide = car.activeOvertakeSide ?? -1;
   const queue =
     !emergencyMode &&
     lead &&
@@ -479,7 +499,7 @@ export function createDrivingPlan(
         ? null
         : round(
             needsOvertake
-              ? (i < 20 ? 2.8 : i < 35 ? -2.8 : (i % 2 === 0 ? 3.4 : -3.4))
+              ? (i < 25 ? overtakeSide * 2.8 : i < 38 ? overtakeSide * 3.2 : (i % 2 === 0 ? overtakeSide * 3.6 : 0.0))
               : (random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? 0.15 : 0.35),
             3,
           );

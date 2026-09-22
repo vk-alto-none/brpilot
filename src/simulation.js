@@ -492,7 +492,7 @@ export class Simulation {
         reason = "Destination ahead";
       }
     }
-    const isLaterallyClear = Math.abs(v.maneuver?.lane_offset_m || 0) > 1.2;
+    const isLaterallyClear = Math.abs(v.maneuver?.lane_offset_m || 0) > 0.8 || Boolean(v.activeOvertakeSide);
     const isOvertakingManeuver = (this.emergencyMode || this.rush_mode) && v === this.player && isLaterallyClear;
     if (!isOvertakingManeuver) {
       const cap = followingSpeed(v, lead);
@@ -513,8 +513,11 @@ export class Simulation {
         ? predictTrafficConflict(v, [...this.traffic, ...this.pedestrians])
         : null;
     if (conflict?.braking_reduces_risk && conflict.max_speed_mps < max) {
-      max = conflict.max_speed_mps;
-      reason = conflict.reason;
+      const isLeadVehicleConflict = isOvertakingManeuver && (conflict.type === "car" || conflict.type === "motorcycle");
+      if (!isLeadVehicleConflict || (conflict.time_s !== null && conflict.time_s < 0.25)) {
+        max = conflict.max_speed_mps;
+        reason = conflict.reason;
+      }
     }
     const released = this.courtesy.get(rule.nodeId)?.id === v.id;
     if (v !== this.player && released && !rule.mustStop && !this.complete) {
