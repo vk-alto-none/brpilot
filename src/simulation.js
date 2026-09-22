@@ -166,8 +166,10 @@ export class Simulation {
     while (this.traffic.length > count) {
       this.traffic.pop();
     }
-    for (let i = this.traffic.length; i < count; i++) {
-      this.spawnTraffic(i, false);
+    let attempts = 0;
+    while (this.traffic.length < count && attempts < count * 25) {
+      attempts++;
+      this.spawnTraffic(this.traffic.length, false);
     }
   }
 
@@ -184,15 +186,25 @@ export class Simulation {
     const nodes = highway
       ? this.world.nodes.filter((node) => /^h\d+$/.test(node.id))
       : this.world.nodes;
-    let a = choose(this.r, nodes),
-      b = choose(
-        this.r,
-        nodes.filter((n) => dist(n, a) > 100),
-      ),
+
+    let ids;
+    // 65% of vehicles spawn along or near the player's upcoming route
+    if (!highway && i % 3 !== 0 && this.player.route?.ids?.length >= 3) {
+      const playerIds = this.player.route.ids;
+      const startIdx = Math.max(0, Math.min(playerIds.length - 3, Math.floor(this.r() * playerIds.length)));
+      const subNodes = playerIds.slice(startIdx, startIdx + 4);
+      ids = subNodes.length >= 2 ? subNodes : playerIds.slice(0, 3);
+    } else {
+      let a = choose(this.r, nodes),
+        b = choose(
+          this.r,
+          nodes.filter((n) => dist(n, a) > 80),
+        );
       ids = highway
         ? (i % 4 < 2 ? nodes : [...nodes].reverse()).map((node) => node.id)
-        : shortestPath(this.world, a.id, b.id);
-    if (ids.length < 3) return this.spawnTraffic(i, distant);
+        : shortestPath(this.world, a.id, b?.id || a.id);
+    }
+    if (ids.length < 2) return;
     const route = makeRoute(
         this.world,
         ids,
@@ -201,13 +213,12 @@ export class Simulation {
       s = this.r() * route.length,
       p = pointAt(route.points, s),
       next = pointAt(route.points, s + 1);
-    if (dist(p, this.player) < (distant ? 600 : 15))
-      return this.spawnTraffic(i, distant);
+    if (dist(p, this.player) < (distant ? 400 : 12)) return;
     const existing = this.traffic.find((v) => v.id === `vehicle-${i}`);
-    if (this.traffic.some((v) => v !== existing && dist(v, p) < 10)) return;
+    if (this.traffic.some((v) => v !== existing && dist(v, p) < 8)) return;
     const v = {
       id: `vehicle-${i}`,
-      type: i % 5 === 0 ? "motorcycle" : "car",
+      type: i % 4 === 0 ? "motorcycle" : "car",
       x: p.x,
       z: p.z,
       heading: heading(p, next),
@@ -215,8 +226,8 @@ export class Simulation {
       s,
       route,
       stops: {},
-      width: i % 5 === 0 ? 0.8 : 1.9,
-      depth: i % 5 === 0 ? 2.3 : 4.2,
+      width: i % 4 === 0 ? 0.8 : 1.9,
+      depth: i % 4 === 0 ? 2.3 : 4.2,
       obeysRules: this.trafficBehavior === "standard" ? true : (this.trafficBehavior === "aggressive" ? (this.r() > 0.3) : (this.r() > 0.8)),
       speedMultiplier: this.trafficBehavior === "chaos" ? (1.3 + this.r() * 0.5) : (this.trafficBehavior === "aggressive" ? 1.2 : 1.0),
       color: choose(this.r, [

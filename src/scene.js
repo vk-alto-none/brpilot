@@ -1037,12 +1037,22 @@ export class DriveScene {
       if (mesh.isMesh && mesh.material.name === "Glass")
         mesh.visible = !insideCar;
     });
-    for (const p of this.sim.traffic) {
-      const m = this.vehicles.get(p.id);
-      if (m) {
-        m.position.set(p.x, 0, p.z);
-        m.rotation.y = -p.heading;
+    const activeTrafficIds = new Set(this.sim.traffic.map((v) => v.id));
+    for (const [id, mesh] of this.vehicles) {
+      if (!activeTrafficIds.has(id)) {
+        this.scene.remove(mesh);
+        this.vehicles.delete(id);
       }
+    }
+    for (const p of this.sim.traffic) {
+      let m = this.vehicles.get(p.id);
+      if (!m) {
+        m = carModel(p.color, p.type === "motorcycle");
+        this.vehicles.set(p.id, m);
+        this.scene.add(m);
+      }
+      m.position.set(p.x, 0, p.z);
+      m.rotation.y = -p.heading;
     }
     for (const p of this.sim.pedestrians) {
       const m = this.people.get(p.id);
