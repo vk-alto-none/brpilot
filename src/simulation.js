@@ -1193,7 +1193,7 @@ export class Simulation {
         : ["left", "right"].includes(nav.next_turn) && nav.turn_distance_m < 48
           ? 12
           : this.world.theme.limit;
-    const ceiling = this.emergencyMode
+    const ceiling = (this.emergencyMode || this.rush_mode)
       ? 30.0
       : round(
           Math.min(env.planningMax, uTurn?.speed_limit_mps ?? Infinity, turnCap),
@@ -1212,6 +1212,7 @@ export class Simulation {
       ceiling,
       env.rule,
       this.emergencyMode,
+      this.rush_mode,
     );
     this.lastPlan = plan;
     // Give Jev readable edges in normal driving. The raw mesh patches remain
@@ -1220,6 +1221,8 @@ export class Simulation {
     const state = {
       batch_id: plan.batch_id,
       route_version: this.routeVersion,
+      rush_mode: Boolean(this.rush_mode),
+      emergency_mode: Boolean(this.emergencyMode),
       global: this.globalNavigation(),
       driving_style: {
         name: "aggressive",

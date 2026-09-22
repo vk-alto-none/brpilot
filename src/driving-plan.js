@@ -152,7 +152,9 @@ export function createDrivingPlan(
   ceiling,
   control = null,
   emergencyMode = false,
+  rushMode = false,
 ) {
+  const isOvertake = emergencyMode || rushMode;
   const surfaces = localRoads(
     world,
     car,
@@ -209,6 +211,7 @@ export function createDrivingPlan(
         obstacles.filter((o) => o.type === "car" || o.type === "motorcycle"),
       );
   const queue =
+    !isOvertake &&
     lead &&
     crossing &&
     ["stop", "signal"].includes(world.byId[crossing.nodeId].control) &&
@@ -403,6 +406,8 @@ export function createDrivingPlan(
       collision_in_s: collisionTime === null ? null : round(collisionTime, 2),
       collision_object_id: collisionObject,
     };
+    const lanePenaltyMultiplier = isOvertake ? 0.05 : 1.0;
+    const speedBonus = isOvertake && data.velocity_mps > 0 ? data.velocity_mps * 4 : 0;
     const score =
       imminentCollision * 10000 +
       (collision && !imminentCollision ? 20 : 0) +
@@ -411,11 +416,12 @@ export function createDrivingPlan(
           headingError * 0.035 +
           data.road_distance_after_m * 0.5
         : maxOutside * 1000 +
-          laneExcess * 30 +
-          (laneError / 31) * 8 +
-          tracking +
+          laneExcess * (30 * lanePenaltyMultiplier) +
+          (laneError / 31) * (8 * lanePenaltyMultiplier) +
+          tracking * (isOvertake ? 0.2 : 1.0) +
           routeEnd.distance * 2 +
-          Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3);
+          Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3 -
+          speedBonus);
     return { data, projection, score };
   }
 
@@ -443,7 +449,7 @@ export function createDrivingPlan(
             : mergeTraffic && i < 5
               ? maxSpeed * (0.3 + random() * 0.25)
               : maxSpeed *
-                (((requiresStop || mergeTraffic) && i < 10) || (!emergencyMode && lead && i < 8)
+                (((requiresStop || mergeTraffic) && i < 10) || (!isOvertake && lead && i < 8)
                   ? 0.25 + random() * 0.3
                   : merging
                     ? 0.95 + random() * 0.05
@@ -454,7 +460,7 @@ export function createDrivingPlan(
     const laneOffset =
       recovering || i >= 44
         ? null
-        : round((random() * 2 - 1) * (i < 14 ? 0.1 : i < 30 ? (emergencyMode ? 2.8 : 0.65) : (emergencyMode ? 3.8 : 1.35)), 3);
+        : round((random() * 2 - 1) * (i < 14 ? 0.1 : i < 30 ? (isOvertake ? 2.8 : 0.65) : (isOvertake ? 3.8 : 1.35)), 3);
     const lookahead = recovering
       ? null
       : round(
@@ -505,7 +511,7 @@ export function createDrivingPlan(
         p.data.stays_on_road &&
         !p.data.collision_imminent &&
         (world.type !== "highway" || p.data.follows_route_direction) &&
-        (p.data.stays_in_lane || p.data.returning_to_lane || emergencyMode),
+        (p.data.stays_in_lane || p.data.returning_to_lane || isOvertake),
     );
     const rank = (a, b) => a.score - b.score;
     const eligible = queue ? safe.filter((p) => p.data.queue_compatible) : safe;
