@@ -492,7 +492,8 @@ export class Simulation {
         reason = "Destination ahead";
       }
     }
-    const isOvertakingManeuver = (this.emergencyMode || this.rush_mode) && v === this.player && (Math.abs(v.maneuver?.lane_offset_m || 0) > 0.35 || Math.abs(v.steering || 0) > 0.04);
+    const isLaterallyClear = Math.abs(v.maneuver?.lane_offset_m || 0) > 1.2;
+    const isOvertakingManeuver = (this.emergencyMode || this.rush_mode) && v === this.player && isLaterallyClear;
     if (!isOvertakingManeuver) {
       const cap = followingSpeed(v, lead);
       if (cap < max) {
@@ -1204,10 +1205,11 @@ export class Simulation {
         : ["left", "right"].includes(nav.next_turn) && nav.turn_distance_m < 48
           ? 12
           : this.world.theme.limit;
-    const ceiling = (this.emergencyMode || this.rush_mode)
+    const baseLimit = this.rush_mode ? Math.max(30.0, this.world.theme.limit) : this.world.theme.limit;
+    const ceiling = this.emergencyMode
       ? 30.0
       : round(
-          Math.min(env.planningMax, uTurn?.speed_limit_mps ?? Infinity, turnCap),
+          Math.min(baseLimit, env.planningMax, uTurn?.speed_limit_mps ?? Infinity, turnCap),
           1,
         );
     const plan = createDrivingPlan(

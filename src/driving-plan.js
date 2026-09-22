@@ -210,20 +210,27 @@ export function createDrivingPlan(
         car,
         obstacles.filter((o) => o.type === "car" || o.type === "motorcycle"),
       );
+  const isApproachingControlOrDestination =
+    requiresStop ||
+    (crossing && crossing.stopS - near.s > -3 && crossing.stopS - near.s < 60) ||
+    (!recovering && car.route?.length && car.route.length - near.s < 30);
   const needsOvertake =
     isOvertake &&
+    !isApproachingControlOrDestination &&
     lead &&
     lead.gap < 40 &&
     (lead.other.speed < maxSpeed * 0.95 || lead.gap < 25);
   const queue =
-    !needsOvertake &&
+    !emergencyMode &&
     lead &&
-    crossing &&
-    ["stop", "signal"].includes(world.byId[crossing.nodeId].control) &&
-    crossing.stopS - near.s > -3 &&
-    crossing.stopS - near.s < 90 &&
-    lead.gap < 45 &&
-    lead.gap < crossing.stopS - near.s + 8
+    ((crossing &&
+      ["stop", "signal"].includes(world.byId[crossing.nodeId].control) &&
+      crossing.stopS - near.s > -3 &&
+      crossing.stopS - near.s < 90 &&
+      lead.gap < 45 &&
+      lead.gap < crossing.stopS - near.s + 8) ||
+      (car.route?.length && car.route.length - near.s < 35 && lead.gap < 30) ||
+      (lead.other.speed < 1.0 && lead.gap < 20))
       ? {
           lead_id: lead.other.id,
           gap_m: round(lead.gap, 1),

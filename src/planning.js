@@ -339,13 +339,17 @@ function movingCandidates(state) {
 
 export function stopAvailability(state, moving = movingCandidates(state)) {
   const reasons = [];
-  const blocker = state.scene?.blocking_object;
+  const blocker =
+    state.scene?.blocking_object ||
+    (state.traffic?.queue && Number.isFinite(state.traffic.queue.gap_m) && state.traffic.queue.gap_m <= 4.0
+      ? { gap_m: state.traffic.queue.gap_m }
+      : null);
   if (
     blocker &&
     Number.isFinite(blocker.gap_m) &&
-    blocker.gap_m <= FULL_STOP_DISTANCE_M
+    blocker.gap_m <= 3.5
   )
-    reasons.push("blocking_object_within_2_5m");
+    reasons.push("blocking_object_within_3_5m");
   const intersection = state.scene?.intersection;
   if (
     intersection &&
