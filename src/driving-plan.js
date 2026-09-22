@@ -452,9 +452,12 @@ export function createDrivingPlan(
       route_error_m: round(tracking),
       route_progress_m: round(routeEnd.s - near.s, 1),
       follows_route_direction:
-        velocity >= 0 &&
-        maxHeadingError < Math.PI / 2 &&
-        routeEnd.s >= near.s - 0.1,
+        (velocity >= 0 &&
+          maxHeadingError < Math.PI / 2 &&
+          routeEnd.s >= near.s - 0.1) ||
+        (velocity < 0 &&
+          Math.abs(end.speed) < 3.0 &&
+          Math.abs(routeEnd.s - near.s) < 4.0),
       heading_error_deg: round(headingError, 1),
       offroad_fraction: round(outside / 31, 3),
       max_offroad_fraction: round(maxOutside, 6),
@@ -494,37 +497,43 @@ export function createDrivingPlan(
 
   let pool = [];
   const count = recovering ? CANDIDATE_COUNT - 1 : 55;
+  const isBoxedIn = !recovering && lead && lead.gap < 3.2 && Math.abs(car.speed) < 2.5 && !requiresStop;
   for (let i = 0; i < count; i++) {
     // Stratified random draws cover the whole steering range during recovery.
     // On road, mix broad draws with jitter around route-following curvature.
+    const isReverseCandidate = !recovering && ((isBoxedIn && i < 6) || (i >= 48 && i < 52));
     const steering = recovering
       ? -limit + 2 * limit * ((i + random()) / count)
-      : i % 3 === 0
-        ? (random() * 2 - 1) * limit
-        : clamp(
-            guide + (random() * 2 - 1) * Math.max(0.015, limit * 0.25),
-            -limit,
-            limit,
-          );
+      : isReverseCandidate
+        ? (random() * 0.2 - 0.1)
+        : i % 3 === 0
+          ? (random() * 2 - 1) * limit
+          : clamp(
+              guide + (random() * 2 - 1) * Math.max(0.015, limit * 0.25),
+              -limit,
+              limit,
+            );
     const velocity =
-      maxSpeed < 0.15
+      maxSpeed < 0.15 && !isReverseCandidate
         ? 0
         : recovering
           ? (i % 2 ? -1 : 1) * maxSpeed * (0.6 + 0.4 * random())
-          : requiresStop && i < 8
-            ? maxSpeed * (0.9 + random() * 0.1)
-            : mergeTraffic && i < 5
-              ? maxSpeed * (0.3 + random() * 0.25)
-              : maxSpeed *
-                (((requiresStop || mergeTraffic) && i < 10) || (!needsOvertake && lead && i < 8)
-                  ? 0.25 + random() * 0.3
-                  : merging
-                    ? 0.95 + random() * 0.05
-                    : i % 5
-                      ? 0.94 + random() * 0.06
-                      : 0.78 + random() * 0.12);
+          : isReverseCandidate
+            ? -1.8 * (0.8 + 0.4 * random())
+            : requiresStop && i < 8
+              ? maxSpeed * (0.9 + random() * 0.1)
+              : mergeTraffic && i < 5
+                ? maxSpeed * (0.3 + random() * 0.25)
+                : maxSpeed *
+                  (((requiresStop || mergeTraffic) && i < 10) || (!needsOvertake && lead && i < 8)
+                    ? 0.25 + random() * 0.3
+                    : merging
+                      ? 0.95 + random() * 0.05
+                      : i % 5
+                        ? 0.94 + random() * 0.06
+                        : 0.78 + random() * 0.12);
     const laneOffset =
-      recovering || i >= 44
+      recovering || i >= 44 || isReverseCandidate
         ? null
         : round(
             needsOvertake
@@ -532,7 +541,7 @@ export function createDrivingPlan(
               : (random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? 0.15 : 0.35),
             3,
           );
-    const lookahead = recovering
+    const lookahead = recovering || isReverseCandidate
       ? null
       : round(
           clamp(
