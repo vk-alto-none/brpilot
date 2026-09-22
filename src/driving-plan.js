@@ -212,7 +212,6 @@ export function createDrivingPlan(
       );
   const isApproachingControlOrDestination =
     requiresStop ||
-    (crossing && crossing.stopS - near.s > -3 && crossing.stopS - near.s < 60) ||
     (!recovering && car.route?.length && car.route.length - near.s < 30);
   const nearbyVehicles = obstacles.filter(
     (o) => (o.type === "car" || o.type === "motorcycle") && o.id !== car.id,
@@ -249,24 +248,28 @@ export function createDrivingPlan(
   }
   const overtakeSide = car.activeOvertakeSide ?? -1;
   const queue =
-    !emergencyMode &&
-    lead &&
-    ((crossing &&
-      ["stop", "signal"].includes(world.byId[crossing.nodeId].control) &&
-      crossing.stopS - near.s > -3 &&
-      crossing.stopS - near.s < 90 &&
-      lead.gap < 45 &&
-      lead.gap < crossing.stopS - near.s + 8) ||
-      (car.route?.length && car.route.length - near.s < 35 && lead.gap < 30) ||
-      (lead.other.speed < 1.0 && lead.gap < 20))
-      ? {
-          lead_id: lead.other.id,
-          gap_m: round(lead.gap, 1),
-          lead_speed_mps: round(lead.other.speed, 1),
-          target_gap_m: round(followingGap(car, lead.other), 1),
-          policy: "follow_in_lane",
-        }
-      : null;
+    !isOvertake
+      ? lead &&
+        ((requiresStop && lead.gap < 45) ||
+          (car.route?.length && car.route.length - near.s < 35 && lead.gap < 30) ||
+          (lead.other.speed < 1.0 && lead.gap < 20))
+        ? {
+            lead_id: lead.other.id,
+            gap_m: round(lead.gap, 1),
+            lead_speed_mps: round(lead.other.speed, 1),
+            target_gap_m: round(followingGap(car, lead.other), 1),
+            policy: "follow_in_lane",
+          }
+        : null
+      : requiresStop && lead && lead.gap < 30
+        ? {
+            lead_id: lead.other.id,
+            gap_m: round(lead.gap, 1),
+            lead_speed_mps: round(lead.other.speed, 1),
+            target_gap_m: round(followingGap(car, lead.other), 1),
+            policy: "follow_in_lane",
+          }
+        : null;
   const limitFollowingSpeed = lead
     ? (ghost, time) =>
         followingSpeed(ghost, leadVehicle(ghost, [otherPose(lead.other, time)]))
