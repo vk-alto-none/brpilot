@@ -210,8 +210,13 @@ export function createDrivingPlan(
         car,
         obstacles.filter((o) => o.type === "car" || o.type === "motorcycle"),
       );
+  const needsOvertake =
+    isOvertake &&
+    lead &&
+    lead.gap < 40 &&
+    (lead.other.speed < maxSpeed * 0.95 || lead.gap < 25);
   const queue =
-    !isOvertake &&
+    !needsOvertake &&
     lead &&
     crossing &&
     ["stop", "signal"].includes(world.byId[crossing.nodeId].control) &&
@@ -261,27 +266,25 @@ export function createDrivingPlan(
 
   const laneHalfWidth =
     section?.laneHalfWidth ?? (world.type === "highway" ? 2.25 : 3);
-  const laneMeasure = (pose) => {
-    const n = nearestOnPath(pose, localRoute);
-    const lateral =
-      (pose.x - n.x) * Math.cos(n.heading) +
-      (pose.z - n.z) * Math.sin(n.heading);
-    const delta = angle(pose.heading - n.heading);
-    const radius =
-      (Math.abs(Math.cos(delta)) * car.width) / 2 +
-      (Math.abs(Math.sin(delta)) * car.depth) / 2;
-    return {
-      offset: lateral,
-      headingError: Math.abs(delta),
-      excess: Math.max(
-        0,
-        Math.abs(lateral) +
-          radius -
-          (routeSection(car, n.s)?.laneHalfWidth ?? laneHalfWidth),
-      ),
-    };
-  };
   const startLane = laneMeasure(car);
+
+  function laneMeasure(pose) {
+    const p = nearestOnPath(pose, localRoute);
+    const rawOffset =
+      (pose.x - p.x) * Math.cos(p.heading) +
+      (pose.z - p.z) * Math.sin(p.heading);
+    const halfWidth = laneHalfWidth;
+    const excess = Math.max(
+      0,
+      Math.abs(rawOffset) + pose.width / 2 - halfWidth,
+    );
+    return {
+      offset: rawOffset,
+      excess,
+      headingError: Math.abs(angle(p.heading - pose.heading)),
+    };
+  }
+
   function evaluate(
     steering,
     velocity,
@@ -289,17 +292,17 @@ export function createDrivingPlan(
     lookahead = null,
     stopAtLine = null,
   ) {
-    const maneuver = {
-      steering,
-      lane_offset_m: laneOffset,
-      lookahead_m: lookahead,
-      stop_at_line: stopAtLine,
-    };
-    if (laneOffset !== null) steering = maneuverSteering(car, maneuver);
-    steering = round(clamp(steering, -0.85, 0.85), 5);
-    velocity = round(velocity, 2);
-    maneuver.steering = steering;
-    const activeFollowingLimit = (emergencyMode || (laneOffset !== null && Math.abs(laneOffset) > 0.35))
+    const maneuver =
+      laneOffset === null
+        ? null
+        : {
+            lane_offset_m: laneOffset,
+            lookahead_m: lookahead,
+            stop_at_line: stopAtLine,
+          };
+    // Don't limit candidate speed to following speed when performing a wide lateral overtake
+    const isLateralOvertake = needsOvertake && Math.abs(laneOffset || 0) > 0.35;
+    const activeFollowingLimit = isLateralOvertake
       ? null
       : limitFollowingSpeed;
     const projection = projectVector(
@@ -406,8 +409,8 @@ export function createDrivingPlan(
       collision_in_s: collisionTime === null ? null : round(collisionTime, 2),
       collision_object_id: collisionObject,
     };
-    const lanePenaltyMultiplier = isOvertake ? 0.05 : 1.0;
-    const speedBonus = isOvertake && data.velocity_mps > 0 ? data.velocity_mps * 4 : 0;
+    const lanePenaltyMultiplier = needsOvertake ? 0.05 : 1.0;
+    const speedBonus = needsOvertake && data.velocity_mps > 0 ? data.velocity_mps * 4 : 0;
     const score =
       imminentCollision * 10000 +
       (collision && !imminentCollision ? 20 : 0) +
@@ -418,7 +421,7 @@ export function createDrivingPlan(
         : maxOutside * 1000 +
           laneExcess * (30 * lanePenaltyMultiplier) +
           (laneError / 31) * (8 * lanePenaltyMultiplier) +
-          tracking * (isOvertake ? 0.2 : 1.0) +
+          tracking * (needsOvertake ? 0.2 : 1.0) +
           routeEnd.distance * 2 +
           Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3 -
           speedBonus);
@@ -449,7 +452,7 @@ export function createDrivingPlan(
             : mergeTraffic && i < 5
               ? maxSpeed * (0.3 + random() * 0.25)
               : maxSpeed *
-                (((requiresStop || mergeTraffic) && i < 10) || (!isOvertake && lead && i < 8)
+                (((requiresStop || mergeTraffic) && i < 10) || (!needsOvertake && lead && i < 8)
                   ? 0.25 + random() * 0.3
                   : merging
                     ? 0.95 + random() * 0.05
@@ -460,7 +463,7 @@ export function createDrivingPlan(
     const laneOffset =
       recovering || i >= 44
         ? null
-        : round((random() * 2 - 1) * (i < 14 ? 0.1 : i < 30 ? (isOvertake ? 2.8 : 0.65) : (isOvertake ? 3.8 : 1.35)), 3);
+        : round((random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? (needsOvertake ? 2.8 : 0.15) : (needsOvertake ? 3.6 : 0.35)), 3);
     const lookahead = recovering
       ? null
       : round(
@@ -511,7 +514,7 @@ export function createDrivingPlan(
         p.data.stays_on_road &&
         !p.data.collision_imminent &&
         (world.type !== "highway" || p.data.follows_route_direction) &&
-        (p.data.stays_in_lane || p.data.returning_to_lane || isOvertake),
+        (p.data.stays_in_lane || p.data.returning_to_lane || needsOvertake),
     );
     const rank = (a, b) => a.score - b.score;
     const eligible = queue ? safe.filter((p) => p.data.queue_compatible) : safe;

@@ -315,9 +315,8 @@ function movingCandidates(state) {
         ([, v]) =>
           v.stays_on_road && (!forwardOnly || v.follows_route_direction),
       );
-  // A normal traffic queue is not an obstacle to drive around. Keep exploratory
-  // alternatives visible, but offer Jev only lane-following queue maneuvers.
-  const isOvertakeActive = state.emergency_mode || state.rush_mode;
+  const hasObstacleAhead = Boolean(state.scene?.following || state.traffic?.queue || state.scene?.blocking_object);
+  const isOvertakeActive = (state.emergency_mode || state.rush_mode) && hasObstacleAhead;
   const safe =
     state.traffic?.queue && !state.recovery?.active && !isOvertakeActive
       ? roadSafe.filter(([, v]) => v.queue_compatible)
