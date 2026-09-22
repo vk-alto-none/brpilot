@@ -477,6 +477,7 @@ export function createDrivingPlan(
     const speedBonus = needsOvertake && data.velocity_mps > 0 ? data.velocity_mps * 6 : 0;
     const isCorridorAligned = needsOvertake && laneOffset !== null && Math.sign(laneOffset) === Math.sign(overtakeSide);
     const corridorBonus = isCorridorAligned ? 50 : 0;
+    const reversePenalty = data.velocity_mps < 0 && !recovering ? 500 : 0;
     const score =
       imminentCollision * 50000 +
       (collision ? 20000 : 0) +
@@ -489,7 +490,8 @@ export function createDrivingPlan(
           (laneError / 31) * (8 * lanePenaltyMultiplier) +
           tracking * (needsOvertake ? 0.1 : 1.0) +
           routeEnd.distance * 2 +
-          Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3 -
+          Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3 +
+          reversePenalty -
           speedBonus -
           corridorBonus);
     return { data, projection, score };
@@ -497,11 +499,11 @@ export function createDrivingPlan(
 
   let pool = [];
   const count = recovering ? CANDIDATE_COUNT - 1 : 55;
-  const isBoxedIn = !recovering && lead && lead.gap < 3.2 && Math.abs(car.speed) < 2.5 && !requiresStop;
+  const isBoxedIn = !recovering && lead && lead.gap < 3.0 && Math.abs(car.speed) < 2.0 && !requiresStop;
   for (let i = 0; i < count; i++) {
     // Stratified random draws cover the whole steering range during recovery.
     // On road, mix broad draws with jitter around route-following curvature.
-    const isReverseCandidate = !recovering && ((isBoxedIn && i < 6) || (i >= 48 && i < 52));
+    const isReverseCandidate = !recovering && isBoxedIn && i < 4;
     const steering = recovering
       ? -limit + 2 * limit * ((i + random()) / count)
       : isReverseCandidate
