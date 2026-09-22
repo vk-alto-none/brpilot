@@ -216,17 +216,18 @@ export function createDrivingPlan(
   const nearbyVehicles = obstacles.filter(
     (o) => (o.type === "car" || o.type === "motorcycle") && o.id !== car.id,
   );
+  const overtakeHorizon = Math.max(55, Math.abs(car.speed) * 3.6);
   const passingTarget = nearbyVehicles.find((other) => {
     const dx = other.x - car.x,
       dz = other.z - car.z;
     const forward = dx * Math.sin(car.heading) - dz * Math.cos(car.heading);
     const right = dx * Math.cos(car.heading) + dz * Math.sin(car.heading);
-    return forward > -6.0 && forward < 40 && Math.abs(right) < 4.5;
+    return forward > -6.0 && forward < overtakeHorizon && Math.abs(right) < 4.5;
   });
   const needsOvertake =
     isOvertake &&
     !isApproachingControlOrDestination &&
-    Boolean(passingTarget || (lead && lead.gap < 40));
+    Boolean(passingTarget || (lead && lead.gap < overtakeHorizon));
 
   if (needsOvertake) {
     if (!car.activeOvertakeSide) {
@@ -535,9 +536,9 @@ export function createDrivingPlan(
       ? null
       : round(
           clamp(
-            3.5 + Math.max(car.speed, maxSpeed) * 0.36 + random() * 0.8,
-            4,
-            10,
+            5.0 + Math.max(car.speed, maxSpeed) * 0.75 + random() * 0.8,
+            6,
+            26,
           ),
           2,
         );
