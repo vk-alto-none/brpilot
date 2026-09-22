@@ -151,6 +151,7 @@ export function createDrivingPlan(
   batch,
   ceiling,
   control = null,
+  emergencyMode = false,
 ) {
   const surfaces = localRoads(
     world,
@@ -184,11 +185,12 @@ export function createDrivingPlan(
     crossing.stopS - near.s < 100;
   const requiresStop =
     !recovering &&
+    !emergencyMode &&
     approachingControl &&
     control &&
-    control.distance >= -0.7 &&
+    control.distance >= -12 &&
     ((world.byId[crossing.nodeId].control === "stop" &&
-      !control.stopCompleted) ||
+      !control.stopCompleted && control.distance >= -0.7) ||
       (world.byId[crossing.nodeId].control === "signal" &&
         ["red", "amber"].includes(control.color)));
   const maxSpeed = recovering
@@ -294,12 +296,15 @@ export function createDrivingPlan(
     steering = round(clamp(steering, -0.85, 0.85), 5);
     velocity = round(velocity, 2);
     maneuver.steering = steering;
+    const activeFollowingLimit = (emergencyMode || (laneOffset !== null && Math.abs(laneOffset) > 0.35))
+      ? null
+      : limitFollowingSpeed;
     const projection = projectVector(
       car,
       steering,
       velocity,
       maneuver,
-      limitFollowingSpeed,
+      activeFollowingLimit,
     );
     let outside = 0,
       maxOutside = 0,
@@ -438,7 +443,7 @@ export function createDrivingPlan(
             : mergeTraffic && i < 5
               ? maxSpeed * (0.3 + random() * 0.25)
               : maxSpeed *
-                (((requiresStop || mergeTraffic) && i < 10) || (lead && i < 8)
+                (((requiresStop || mergeTraffic) && i < 10) || (!emergencyMode && lead && i < 8)
                   ? 0.25 + random() * 0.3
                   : merging
                     ? 0.95 + random() * 0.05
@@ -449,7 +454,7 @@ export function createDrivingPlan(
     const laneOffset =
       recovering || i >= 44
         ? null
-        : round((random() * 2 - 1) * (i < 14 ? 0.1 : i < 30 ? 0.65 : 1.35), 3);
+        : round((random() * 2 - 1) * (i < 14 ? 0.1 : i < 30 ? (emergencyMode ? 2.8 : 0.65) : (emergencyMode ? 3.8 : 1.35)), 3);
     const lookahead = recovering
       ? null
       : round(
@@ -500,7 +505,7 @@ export function createDrivingPlan(
         p.data.stays_on_road &&
         !p.data.collision_imminent &&
         (world.type !== "highway" || p.data.follows_route_direction) &&
-        (p.data.stays_in_lane || p.data.returning_to_lane),
+        (p.data.stays_in_lane || p.data.returning_to_lane || emergencyMode),
     );
     const rank = (a, b) => a.score - b.score;
     const eligible = queue ? safe.filter((p) => p.data.queue_compatible) : safe;
@@ -516,7 +521,7 @@ export function createDrivingPlan(
     if (requiresStop || mergeConflict) {
       const approach = pool
         .slice(0, requiresStop ? 8 : 5)
-        .filter((p) => eligible.includes(p) && p.data.velocity_mps > 0)
+        .filter((p) => eligible.includes(p) && (maxSpeed < 0.15 ? true : p.data.velocity_mps > 0))
         .sort(rank)[0];
       if (approach) selected.push(approach);
       for (const [low, high] of [

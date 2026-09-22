@@ -31,15 +31,15 @@ export function stopLineDistance(car, line) {
 // This moderates moving options; choosing whether to stop remains with Jev.
 export function stopApproachSpeed(car, line) {
   const room = Math.max(0, stopLineDistance(car, line) - 0.5);
+  if (room <= 0.1) return 0;
   const deceleration = 4.5;
   const responseAllowance = 0.45;
-  return Math.max(
-    0.6,
+  const speed =
     Math.sqrt(
       (deceleration * responseAllowance) ** 2 + 2 * deceleration * room,
     ) -
-      deceleration * responseAllowance,
-  );
+    deceleration * responseAllowance;
+  return room < 1.5 ? Math.min(speed, room * 1.5) : speed;
 }
 
 // Full low-speed lock fits the route's 3 m U-turn arcs. Fade the extra lock
@@ -317,21 +317,24 @@ function movingCandidates(state) {
       );
   // A normal traffic queue is not an obstacle to drive around. Keep exploratory
   // alternatives visible, but offer Jev only lane-following queue maneuvers.
+  const isOvertakeActive = state.emergency_mode || state.rush_mode;
   const safe =
-    state.traffic?.queue && !state.recovery?.active
+    state.traffic?.queue && !state.recovery?.active && !isOvertakeActive
       ? roadSafe.filter(([, v]) => v.queue_compatible)
       : roadSafe;
   const inLane = safe.filter(([, v]) => v.stays_in_lane);
   const returning = safe.filter(([, v]) => v.returning_to_lane);
-  const preferred = state.recovery?.active
+  const preferred = isOvertakeActive
     ? safe
-    : inLane.length
-      ? inLane
-      : returning.length
-        ? returning
-        : forwardOnly
-          ? []
-          : safe;
+    : state.recovery?.active
+      ? safe
+      : inLane.length
+        ? inLane
+        : returning.length
+          ? returning
+          : forwardOnly
+            ? []
+            : safe;
   return preferred;
 }
 
@@ -348,14 +351,15 @@ export function stopAvailability(state, moving = movingCandidates(state)) {
   if (
     intersection &&
     !intersection.already_entered &&
+    !state.emergency_mode &&
     Number.isFinite(intersection.stop_line_ahead_m) &&
     intersection.stop_line_ahead_m >= -0.5 &&
-    intersection.stop_line_ahead_m <= FULL_STOP_DISTANCE_M &&
+    intersection.stop_line_ahead_m <= 3.5 &&
     ((intersection.control === "stop" && !intersection.stop_completed) ||
       (intersection.control === "signal" &&
         ["red", "amber"].includes(intersection.signal)))
   )
-    reasons.push("required_stop_line_within_2_5m");
+    reasons.push("required_stop_line_ahead");
   if (
     Number.isFinite(state.destination_m) &&
     state.destination_m <= FULL_STOP_DISTANCE_M

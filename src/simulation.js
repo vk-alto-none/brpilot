@@ -110,6 +110,8 @@ export class Simulation {
       width: 1.9,
       depth: 4.75,
     };
+    this.trafficDensity = this.world.theme.traffic;
+    this.trafficBehavior = "standard";
     this.traffic = [];
     for (let i = 0; i < this.world.theme.traffic; i++) this.spawnTraffic(i);
     this.pedestrians = [];
@@ -155,6 +157,28 @@ export class Simulation {
       });
     }
   }
+  setTrafficDensity(count) {
+    this.trafficDensity = count;
+    if (count === 0) {
+      this.traffic = [];
+      return;
+    }
+    while (this.traffic.length > count) {
+      this.traffic.pop();
+    }
+    for (let i = this.traffic.length; i < count; i++) {
+      this.spawnTraffic(i, false);
+    }
+  }
+
+  setTrafficBehavior(behavior) {
+    this.trafficBehavior = behavior;
+    for (const v of this.traffic) {
+      v.obeysRules = behavior === "standard" ? true : (behavior === "aggressive" ? (this.r() > 0.3) : (this.r() > 0.8));
+      v.speedMultiplier = behavior === "chaos" ? (1.3 + this.r() * 0.5) : (behavior === "aggressive" ? 1.2 : 1.0);
+    }
+  }
+
   spawnTraffic(i, distant = false) {
     const highway = this.world.type === "highway";
     const nodes = highway
@@ -193,6 +217,8 @@ export class Simulation {
       stops: {},
       width: i % 5 === 0 ? 0.8 : 1.9,
       depth: i % 5 === 0 ? 2.3 : 4.2,
+      obeysRules: this.trafficBehavior === "standard" ? true : (this.trafficBehavior === "aggressive" ? (this.r() > 0.3) : (this.r() > 0.8)),
+      speedMultiplier: this.trafficBehavior === "chaos" ? (1.3 + this.r() * 0.5) : (this.trafficBehavior === "aggressive" ? 1.2 : 1.0),
       color: choose(this.r, [
         "#de8e69",
         "#e9be57",
@@ -334,7 +360,11 @@ export class Simulation {
       v.amber?.key === amberKey
         ? v.amber.proceed
         : (v.speed * v.speed) / 16 > Math.max(0, delta - v.depth / 2 - 0.2);
-    const inside = delta < -0.7;
+    const inside =
+      node.control === "signal" &&
+      (signal.color === "red" || signal.color === "amber")
+        ? delta < -14
+        : delta < -0.7;
     if (update && v === this.player)
       this.rememberIntersectionStop(v, c, signal.color);
     let stop = v.stops[c.nodeId];
@@ -427,16 +457,21 @@ export class Simulation {
       gap = lead?.gap ?? Infinity;
     let max = Math.min(this.world.theme.limit, routeSpeedLimit(v, v.s)),
       reason = null;
-    // NPCs obey the scripted traffic rules. Jev gets the observations and
-    // decides when the player's car should approach, yield, or stop.
-    if (v !== this.player && rule.mustStop && rule.distance > -0.7) {
-      const cap = Math.sqrt(
-        2 * 5 * Math.max(0, rule.distance - v.depth / 2 - 0.2),
-      );
+    // Check stop rules (Red lights, amber signals, and stop signs)
+    const shouldObeyStopRule = (v === this.player)
+      ? (!this.emergencyMode)
+      : ((v.obeysRules ?? true) && this.trafficBehavior !== "chaos");
+
+    if (shouldObeyStopRule && rule.mustStop && rule.distance > -12) {
+      const stopDistance = Math.max(0, rule.distance - v.depth / 2 - 0.2);
+      const cap = stopDistance <= 0.05 ? 0 : Math.sqrt(2 * 5 * stopDistance);
       if (cap < max) {
         max = cap;
         reason = rule.reason;
       }
+    }
+    if (v !== this.player && v.speedMultiplier) {
+      max *= v.speedMultiplier;
     }
     if (v === this.player && !this.freeExplore) {
       const distance = Math.max(0, v.route.length - v.s);
@@ -446,13 +481,16 @@ export class Simulation {
         reason = "Destination ahead";
       }
     }
-    const cap = followingSpeed(v, lead);
-    if (cap < max) {
-      max = cap;
-      reason =
-        lead?.other.type === "motorcycle"
-          ? "Motorcycle ahead"
-          : "Vehicle ahead";
+    const isOvertakingManeuver = (this.emergencyMode || this.rush_mode) && v === this.player && (Math.abs(v.maneuver?.lane_offset_m || 0) > 0.35 || Math.abs(v.steering || 0) > 0.04);
+    if (!isOvertakingManeuver) {
+      const cap = followingSpeed(v, lead);
+      if (cap < max) {
+        max = cap;
+        reason =
+          lead?.other.type === "motorcycle"
+            ? "Motorcycle ahead"
+            : "Vehicle ahead";
+      }
     }
     // A hazard on the currently selected path must not zero out the speeds of
     // every new candidate. Each candidate predicts its own collisions, while
@@ -543,6 +581,7 @@ export class Simulation {
         target = Math.min(target, 6.5);
       v.speed += clamp(target - v.speed, -7 * dt, 2.8 * dt);
       if (
+        (v.obeysRules ?? true) &&
         rule.mustStop &&
         rule.distance >= 0 &&
         v.speed * dt > Math.max(0, rule.distance - v.depth / 2 - 0.2)
@@ -612,6 +651,9 @@ export class Simulation {
       const steering = v.maneuver
         ? maneuverSteering(v, v.maneuver)
         : v.steering;
+      if (target === 0 && Math.abs(v.speed) < 0.25 && !this.emergencyMode) {
+        v.speed = 0;
+      }
       physics(v, steering, target, dt);
     } else
       pedalPhysics(
@@ -1151,10 +1193,12 @@ export class Simulation {
         : ["left", "right"].includes(nav.next_turn) && nav.turn_distance_m < 48
           ? 12
           : this.world.theme.limit;
-    const ceiling = round(
-      Math.min(env.planningMax, uTurn?.speed_limit_mps ?? Infinity, turnCap),
-      1,
-    );
+    const ceiling = this.emergencyMode
+      ? 30.0
+      : round(
+          Math.min(env.planningMax, uTurn?.speed_limit_mps ?? Infinity, turnCap),
+          1,
+        );
     const plan = createDrivingPlan(
       this.player,
       this.world,
@@ -1167,6 +1211,7 @@ export class Simulation {
       `b${++this.planSequence}`,
       ceiling,
       env.rule,
+      this.emergencyMode,
     );
     this.lastPlan = plan;
     // Give Jev readable edges in normal driving. The raw mesh patches remain
