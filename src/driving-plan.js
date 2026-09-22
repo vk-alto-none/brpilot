@@ -230,15 +230,37 @@ export function createDrivingPlan(
 
   if (needsOvertake) {
     if (!car.activeOvertakeSide) {
-      // Select the safest passing side with available drivable road width
-      const testPointLeft = move(pointAt(car.route.points, near.s + 10), (near.heading ?? car.heading) + Math.PI / 2, -2.8);
+      // Check forward obstacle density in Left corridor vs Right corridor
+      let leftBlockCount = 0;
+      let rightBlockCount = 0;
+      for (const other of nearbyVehicles) {
+        const dx = other.x - car.x,
+          dz = other.z - car.z;
+        const forward = dx * Math.sin(car.heading) - dz * Math.cos(car.heading);
+        const right = dx * Math.cos(car.heading) + dz * Math.sin(car.heading);
+        if (forward > -2.0 && forward < 45) {
+          if (right >= -4.5 && right <= -0.4) leftBlockCount++;
+          if (right >= 0.4 && right <= 4.5) rightBlockCount++;
+          if (Math.abs(right) < 0.4) {
+            leftBlockCount += 0.5;
+            rightBlockCount += 0.5;
+          }
+        }
+      }
+
+      const testPointLeft = move(pointAt(car.route.points, near.s + 12), (near.heading ?? car.heading) + Math.PI / 2, -2.8);
       const leftOccupancy = roadOccupancy({ ...car, ...testPointLeft }, surfaces);
-      const testPointRight = move(pointAt(car.route.points, near.s + 10), (near.heading ?? car.heading) + Math.PI / 2, 2.8);
+      const testPointRight = move(pointAt(car.route.points, near.s + 12), (near.heading ?? car.heading) + Math.PI / 2, 2.8);
       const rightOccupancy = roadOccupancy({ ...car, ...testPointRight }, surfaces);
-      if (leftOccupancy.on_road) {
-        car.activeOvertakeSide = -1; // Default passing side: Left
+
+      if (leftBlockCount < rightBlockCount && leftOccupancy.on_road) {
+        car.activeOvertakeSide = -1; // Left corridor is clearer
+      } else if (rightBlockCount < leftBlockCount && rightOccupancy.on_road) {
+        car.activeOvertakeSide = 1;  // Right corridor is clearer
+      } else if (leftOccupancy.on_road) {
+        car.activeOvertakeSide = -1; // Default to Left passing lane
       } else if (rightOccupancy.on_road) {
-        car.activeOvertakeSide = 1;  // Right pass
+        car.activeOvertakeSide = 1;
       } else {
         car.activeOvertakeSide = -1;
       }
@@ -447,11 +469,13 @@ export function createDrivingPlan(
       collision_in_s: collisionTime === null ? null : round(collisionTime, 2),
       collision_object_id: collisionObject,
     };
-    const lanePenaltyMultiplier = needsOvertake ? 0.05 : 1.0;
-    const speedBonus = needsOvertake && data.velocity_mps > 0 ? data.velocity_mps * 4 : 0;
+    const lanePenaltyMultiplier = needsOvertake ? 0.02 : 1.0;
+    const speedBonus = needsOvertake && data.velocity_mps > 0 ? data.velocity_mps * 6 : 0;
+    const isCorridorAligned = needsOvertake && laneOffset !== null && Math.sign(laneOffset) === Math.sign(overtakeSide);
+    const corridorBonus = isCorridorAligned ? 50 : 0;
     const score =
-      imminentCollision * 10000 +
-      (collision && !imminentCollision ? 20 : 0) +
+      imminentCollision * 50000 +
+      (collision ? 20000 : 0) +
       (recovering
         ? (recovery ? dist(end, goal) : 100) +
           headingError * 0.035 +
@@ -459,10 +483,11 @@ export function createDrivingPlan(
         : maxOutside * 1000 +
           laneExcess * (30 * lanePenaltyMultiplier) +
           (laneError / 31) * (8 * lanePenaltyMultiplier) +
-          tracking * (needsOvertake ? 0.2 : 1.0) +
+          tracking * (needsOvertake ? 0.1 : 1.0) +
           routeEnd.distance * 2 +
           Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.3 -
-          speedBonus);
+          speedBonus -
+          corridorBonus);
     return { data, projection, score };
   }
 
