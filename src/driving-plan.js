@@ -214,12 +214,20 @@ export function createDrivingPlan(
     requiresStop ||
     (crossing && crossing.stopS - near.s > -3 && crossing.stopS - near.s < 60) ||
     (!recovering && car.route?.length && car.route.length - near.s < 30);
+  const nearbyVehicles = obstacles.filter(
+    (o) => (o.type === "car" || o.type === "motorcycle") && o.id !== car.id,
+  );
+  const passingTarget = nearbyVehicles.find((other) => {
+    const dx = other.x - car.x,
+      dz = other.z - car.z;
+    const forward = dx * Math.sin(car.heading) - dz * Math.cos(car.heading);
+    const right = dx * Math.cos(car.heading) + dz * Math.sin(car.heading);
+    return forward > -6.0 && forward < 40 && Math.abs(right) < 4.5;
+  });
   const needsOvertake =
     isOvertake &&
     !isApproachingControlOrDestination &&
-    lead &&
-    lead.gap < 40 &&
-    (lead.other.speed < maxSpeed * 0.95 || lead.gap < 25);
+    Boolean(passingTarget || (lead && lead.gap < 40));
   const queue =
     !emergencyMode &&
     lead &&
@@ -466,11 +474,15 @@ export function createDrivingPlan(
                     : i % 5
                       ? 0.94 + random() * 0.06
                       : 0.78 + random() * 0.12);
-    // Dense near-center choices on straights, plus wider lane-preserving alternatives.
     const laneOffset =
       recovering || i >= 44
         ? null
-        : round((random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? (needsOvertake ? 2.8 : 0.15) : (needsOvertake ? 3.6 : 0.35)), 3);
+        : round(
+            needsOvertake
+              ? (i < 20 ? 2.8 : i < 35 ? -2.8 : (i % 2 === 0 ? 3.4 : -3.4))
+              : (random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? 0.15 : 0.35),
+            3,
+          );
     const lookahead = recovering
       ? null
       : round(

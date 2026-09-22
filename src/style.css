@@ -443,6 +443,61 @@ kbd {
     box-shadow: 0 0 24px rgba(255, 170, 0, 0.95), 0 0 8px rgba(255, 220, 100, 0.8);
   }
 }
+
+.emergency-button {
+  border: 1px solid rgba(255, 59, 48, 0.4);
+  background: rgba(23, 26, 32, 0.85);
+  border-radius: 8px;
+  min-height: 41px;
+  padding: 10px 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 7px;
+  color: #ff4d4f;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+}
+.emergency-button .siren-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+.emergency-button:hover {
+  background: rgba(255, 77, 79, 0.15);
+  border-color: #ff4d4f;
+  box-shadow: 0 0 12px rgba(255, 77, 79, 0.35);
+}
+.emergency-button kbd {
+  color: #ff4d4fcc;
+  border-color: #ff4d4f40;
+}
+.emergency-button[aria-checked="true"],
+.emergency-button.active {
+  border-color: #ff1a1a;
+  background: linear-gradient(135deg, #d32f2f 0%, #1976d2 100%);
+  color: #ffffff;
+  font-weight: 700;
+  animation: sirenFlash 1s infinite alternate ease-in-out;
+}
+.emergency-button[aria-checked="true"] kbd,
+.emergency-button.active kbd {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+@keyframes sirenFlash {
+  0% {
+    box-shadow: 0 0 16px rgba(255, 0, 0, 0.9), inset 0 0 8px rgba(255, 0, 0, 0.5);
+    border-color: #ff3333;
+  }
+  100% {
+    box-shadow: 0 0 22px rgba(0, 140, 255, 0.95), inset 0 0 8px rgba(0, 140, 255, 0.6);
+    border-color: #3399ff;
+  }
+}
 #decision-status {
   display: flex;
   flex-direction: column;

@@ -315,8 +315,13 @@ function movingCandidates(state) {
         ([, v]) =>
           v.stays_on_road && (!forwardOnly || v.follows_route_direction),
       );
-  const hasObstacleAhead = Boolean(state.scene?.following || state.traffic?.queue || state.scene?.blocking_object);
-  const isOvertakeActive = (state.emergency_mode || state.rush_mode) && hasObstacleAhead;
+  const hasObstacleAheadOrPassing = Boolean(
+    state.scene?.following ||
+    state.traffic?.queue ||
+    state.scene?.blocking_object ||
+    (state.scene?.nearby && state.scene.nearby.some((o) => o.ahead_m > -6.0 && o.ahead_m < 35 && Math.abs(o.right_m) < 4.5)),
+  );
+  const isOvertakeActive = (state.emergency_mode || state.rush_mode) && hasObstacleAheadOrPassing;
   const safe =
     state.traffic?.queue && !state.recovery?.active && !isOvertakeActive
       ? roadSafe.filter(([, v]) => v.queue_compatible)
