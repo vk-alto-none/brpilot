@@ -1,54 +1,60 @@
-# JevPilot
+# BRPilot — Real-Time Autonomous Driving Simulator & Telemetry Cockpit
 
-https://github.com/user-attachments/assets/4baef58e-54ef-4d17-9982-353a0b6e6f45
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-DGPL%20System--1-green.svg)](https://br.durbhasigurukulam.com/)
+[![Status](https://img.shields.io/badge/Status-Active%20Production-success.svg)](https://br.durbhasigurukulam.com/)
 
-<p align="center">
-  <a href="https://jevpilot.standardagents.ai">
-    <img src="docs/try-jevpilot.svg" alt="Try JevPilot →" width="256" height="64" />
-  </a>
-</p>
+**BRPilot** is a high-performance, real-time 3D autonomous driving simulator and neural telemetry cockpit built with Three.js, Lucide Icons, and Vanilla CSS. It provides closed-loop driving benchmarks, route waypoint navigation, obstacle detection, and live telemetry streaming powered by the **DGPL System-1 Real-Time Decision Engine**.
 
-A demo project showing Tesla Autopilot-like behavior using [Jev by TypeSafe AI](https://typesafe.ai/).
+---
 
-Sign in with Standard Agents for $0.25 of free Jev play credit. Joining the early-access list is optional.
+## 🌟 Features
 
-The hosted `/api/decide` endpoint requires a valid login session. The browser sends its secure, HttpOnly session cookie; the Jev API key stays on the server.
+- **60 FPS Real-Time Simulation**: Smooth canvas rendering with physics modeling, curved road networks, and multi-vehicle traffic.
+- **Dynamic HUD & Telemetry**: Live telemetry dashboard tracking velocity, steering angles, throttle/brake commands, and decision confidence.
+- **DGPL System-1 API Integration**: Seamless connectivity to the ultra-low-latency decision engine endpoint (`https://br.durbhasigurukulam.com/`).
+- **Telemetry Recording & JSON Export**: One-click flight data recorder export for offline analysis and benchmarking.
+- **Modular Autonomy Modes**: Supports autonomous neural driving, baseline comparative agents, and manual keyboard override.
 
-**Interstate 08:** start in Millbrook, turn onto the signed on-ramp, merge, cruise, and exit into Cedar Town for the final stop.
+---
 
-## How it works
+## 🚀 Quickstart
 
-Jev receives compact tables of eligible paths, road boundaries, nearby traffic, signals, stop memory, and destination guidance. Shared table values are sent once, and instructions include only relevant situations. The road graph is sent only when choosing an alternative route after staying more than 30 meters off course for six seconds. Detailed geometry and control calculations stay local.
+### Prerequisites
+- Node.js (v18+ recommended)
+- Modern web browser with WebGL support
 
-The simulator samples fresh steering-and-speed combinations for each decision. On the road, it favors paths that keep the whole car on asphalt. Off road, it explores a wider field of forward and reverse paths and supplies a recovery target, road boundaries, and collision predictions.
+### Installation & Local Run
+```bash
+# Clone the repository
+git clone git@github.com:vk-alto-none/brpilot.git
+cd brpilot
 
-An explicit `driving_style` describes an aggressive driver: keep progressing, stop at the actual line, and close gaps before stopping behind an obstacle. Jev can choose an approach path that progressively slows to a stop 0.5 m before the line. An immediate **stop** is offered only within 2.5 m of a blocker or required stop line, at the destination, or when no eligible moving path exists. Candidate speeds taper near required stops. Jev receives recent-stop memory and collision timing; a safety brake handles collision risks.
+# Install dependencies
+npm install
 
-Use **Candidates** to show the sampled paths: blue/cyan for forward, purple for reverse, amber for paths leaving the lane, orange for predicted collisions, and bright blue for Jev’s selection. Candidate generation and route searches run in a background worker; the renderer smoothly blends the sampled shapes. Open **JSON** to inspect road boundaries, recovery state, and actual choice probabilities.
-
-Requests run up to 4 times/second near turns or traffic, and about 1.5 times/second on clear roads. Questions with one eligible answer are resolved locally. **JSON → Jev input** shows the exact API payload; the cost tooltip and response tab show average payload size and billed input tokens.
-
-## Run locally
-
-```sh
-npm ci
-cp .env.example .env
-# Set TYPESAFE_API_KEY in .env.
+# Start local development server
 npm run dev
 ```
 
-Add your own [TypeSafe AI](https://typesafe.ai/) API key to `.env`:
+Open `http://localhost:5173` to launch the simulator.
 
-```dotenv
-TYPESAFE_API_KEY=your_key_here
-```
+---
 
-Open [localhost:5173](http://localhost:5173). **Local development skips all login, signup, and demo credit limits.** No Standard Agents OAuth credentials are needed. Jev calls use your own key and TypeSafe account billing; free play works without a key. The key stays server-side in the gitignored `.env`—never use a `VITE_` variable for it.
+## 🏛️ Ecosystem & Platform
 
-This also applies to `npm run preview` after `npm run build`. Restart the local server after changing `.env`.
+- **Live Production URL**: [https://br.durbhasigurukulam.com/](https://br.durbhasigurukulam.com/)
+- **Core Platform**: [DGPL System-1 Decision Engine](https://github.com/vk-alto-none/dgpl-system1-decision-engine)
+- **Organization**: [Durbhasi Gurukulam Private Limited (DGPL)](https://durbhasigurukulam.com/)
 
-**J** toggles autopilot · **WASD** to drive · **Space** to brake.
+---
 
-Asset credits and licenses are included in [public/](public/).
+## 📜 Acknowledgements & Attribution
 
-Cloudflare deployment details: [docs/hosting.md](docs/hosting.md).
+BRPilot builds upon and acknowledges the foundational architecture, concepts, and algorithms developed by the open-source autonomous simulation and decision intelligence research community, including initial simulation prototypes inspired by TypeSafe / Jev driving models.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
