@@ -35,6 +35,8 @@ import {
   followingSpeed,
   createObstaclePrediction,
   nearbyPathBlocker,
+  hasRearObstacle,
+  isPassingLaneClear,
 } from "./traffic-safety.js";
 
 function clearSegment(a, b, buildings, padding) {
@@ -154,7 +156,7 @@ export function createDrivingPlan(
   emergencyMode = false,
   rushMode = false,
 ) {
-  const isOvertake = emergencyMode || rushMode;
+  const overtakeMode = emergencyMode || rushMode;
   const surfaces = localRoads(
     world,
     car,
@@ -225,7 +227,7 @@ export function createDrivingPlan(
     return forward > -6.0 && forward < overtakeHorizon && Math.abs(right) < 4.5;
   });
   const needsOvertake =
-    isOvertake &&
+    overtakeMode &&
     !isApproachingControlOrDestination &&
     Boolean(passingTarget || (lead && lead.gap < overtakeHorizon));
 
@@ -249,27 +251,24 @@ export function createDrivingPlan(
         }
       }
 
-      const testPointLeft = move(pointAt(car.route.points, near.s + 12), (near.heading ?? car.heading) + Math.PI / 2, -2.8);
-      const leftOccupancy = roadOccupancy({ ...car, ...testPointLeft }, surfaces);
-      const testPointRight = move(pointAt(car.route.points, near.s + 12), (near.heading ?? car.heading) + Math.PI / 2, 2.8);
-      const rightOccupancy = roadOccupancy({ ...car, ...testPointRight }, surfaces);
+      const leftClear = isPassingLaneClear(car, obstacles, -1);
+      const rightClear = isPassingLaneClear(car, obstacles, 1);
 
-      if (leftBlockCount < rightBlockCount && leftOccupancy.on_road) {
-        car.activeOvertakeSide = -1; // Left corridor is clearer
-      } else if (rightBlockCount < leftBlockCount && rightOccupancy.on_road) {
-        car.activeOvertakeSide = 1;  // Right corridor is clearer
-      } else if (leftOccupancy.on_road) {
-        car.activeOvertakeSide = -1; // Default to Left passing lane
-      } else if (rightOccupancy.on_road) {
-        car.activeOvertakeSide = 1;
-      } else {
+      if (leftClear && leftOccupancy.on_road && (leftBlockCount <= rightBlockCount || !rightClear)) {
+        car.activeOvertakeSide = -1; // Left passing lane is clear & safe
+      } else if (rightClear && rightOccupancy.on_road) {
+        car.activeOvertakeSide = 1;  // Right passing lane is clear & safe
+      } else if (leftClear && leftOccupancy.on_road) {
         car.activeOvertakeSide = -1;
+      } else {
+        car.activeOvertakeSide = null; // Both sides blocked; wait safely in queue
       }
     }
   } else {
     car.activeOvertakeSide = null;
   }
   const overtakeSide = car.activeOvertakeSide ?? -1;
+  const isOvertake = needsOvertake && car.activeOvertakeSide !== null;
   const queue =
     !isOvertake
       ? lead &&
@@ -479,14 +478,16 @@ export function createDrivingPlan(
     const corridorBonus = isCorridorAligned ? 40 : 0;
     const centeringBonus = !needsOvertake && laneOffset === 0.0 ? 15.0 : 0.0;
     const reversePenalty = data.velocity_mps < 0 && !recovering ? 500 : 0;
+    const curbPenalty = maxOutside > 1e-4 ? 50000 : 0;
     const score =
       imminentCollision * 50000 +
       (collision ? 20000 : 0) +
+      curbPenalty +
       (recovering
         ? (recovery ? dist(end, goal) : 100) +
           headingError * 0.035 +
           data.road_distance_after_m * 0.5
-        : maxOutside * 1000 +
+        : maxOutside * 2000 +
           laneExcess * (30 * lanePenaltyMultiplier) +
           (laneError / 31) * (8 * lanePenaltyMultiplier) +
           tracking * (needsOvertake ? 0.3 : 1.0) +
@@ -501,11 +502,12 @@ export function createDrivingPlan(
 
   let pool = [];
   const count = recovering ? CANDIDATE_COUNT - 1 : 55;
-  const isBoxedIn = !recovering && lead && lead.gap < 3.0 && Math.abs(car.speed) < 2.0 && !requiresStop;
+  const rearBlocked = hasRearObstacle(car, obstacles, 12.0);
+  const isBoxedIn = !recovering && lead && lead.gap < 3.0 && Math.abs(car.speed) < 2.0 && !requiresStop && !rearBlocked;
   for (let i = 0; i < count; i++) {
     // Stratified random draws cover the whole steering range during recovery.
     // On road, mix broad draws with jitter around route-following curvature.
-    const isReverseCandidate = !recovering && isBoxedIn && i < 4;
+    const isReverseCandidate = !recovering && isBoxedIn && i < 3;
     const steering = recovering
       ? -limit + 2 * limit * ((i + random()) / count)
       : isReverseCandidate
@@ -523,9 +525,9 @@ export function createDrivingPlan(
         : recovering
           ? (i % 2 ? -1 : 1) * maxSpeed * (0.6 + 0.4 * random())
           : isReverseCandidate
-            ? -1.8 * (0.8 + 0.4 * random())
-            : requiresStop && i < 8
-              ? maxSpeed * (0.9 + random() * 0.1)
+            ? -1.6 * (0.8 + 0.4 * random())
+            : requiresStop && i < 10
+              ? Math.min(maxSpeed, stopApproachSpeed(car, stopLine))
               : mergeTraffic && i < 5
                 ? maxSpeed * (0.3 + random() * 0.25)
                 : maxSpeed *
@@ -540,7 +542,7 @@ export function createDrivingPlan(
       recovering || i >= 44 || isReverseCandidate
         ? null
         : round(
-            needsOvertake
+            isOvertake
               ? (i < 25 ? overtakeSide * 2.8 : i < 38 ? overtakeSide * 3.2 : (i % 2 === 0 ? overtakeSide * 3.6 : 0.0))
               : (i < 35 ? 0.0 : (random() * 2 - 1) * 0.15),
             3,
@@ -556,14 +558,14 @@ export function createDrivingPlan(
           2,
         );
     const stopAtLine =
-      requiresStop && i < 8
+      requiresStop && i < 10
         ? {
             x: stopLine.x,
             z: stopLine.z,
             heading: stopLine.heading,
             node_id: crossing.nodeId,
-            clearance_m: 0.5,
-            deceleration_mps2: round(4 + random() * 0.8, 2),
+            clearance_m: 1.2,
+            deceleration_mps2: round(4.0 + random() * 0.6, 2),
           }
         : null;
     pool.push(evaluate(steering, velocity, laneOffset, lookahead, stopAtLine));

@@ -30,16 +30,17 @@ export function stopLineDistance(car, line) {
 // Leave time for the next Jev response while approaching a required stop.
 // This moderates moving options; choosing whether to stop remains with Jev.
 export function stopApproachSpeed(car, line) {
-  const room = Math.max(0, stopLineDistance(car, line) - 0.5);
-  if (room <= 0.1) return 0;
-  const deceleration = 4.5;
-  const responseAllowance = 0.45;
+  const clearance = 1.2;
+  const room = Math.max(0, stopLineDistance(car, line) - clearance);
+  if (room <= 0.2) return 0;
+  const deceleration = 4.0;
+  const responseAllowance = 0.5;
   const speed =
     Math.sqrt(
       (deceleration * responseAllowance) ** 2 + 2 * deceleration * room,
     ) -
     deceleration * responseAllowance;
-  return room < 1.5 ? Math.min(speed, room * 1.5) : speed;
+  return room < 2.0 ? Math.min(speed, room * 1.2) : speed;
 }
 
 // Full low-speed lock fits the route's 3 m U-turn arcs. Fade the extra lock
@@ -148,14 +149,17 @@ export function maneuverVelocity(car, candidate, velocity) {
   );
   if (candidate.stop_at_line) {
     const line = candidate.stop_at_line;
-    const room = Math.max(0, stopLineDistance(car, line) - line.clearance_m);
-    // The selected maneuver advances to the line and comes to rest there.
-    // The proportional term settles near the line without creeping forever.
+    const clearance = line.clearance_m ?? 1.2;
+    const room = Math.max(0, stopLineDistance(car, line) - clearance);
+    if (room <= 0.15) {
+      return 0;
+    }
+    // The selected maneuver advances to the line and comes to rest firmly before it.
     const cap = Math.min(
       Math.sqrt(2 * line.deceleration_mps2 * room),
-      room * 2.5,
+      room * 2.0,
     );
-    target = Math.min(target, cap < 0.05 ? 0 : cap);
+    target = Math.min(target, cap < 0.1 ? 0 : cap);
   }
   return target;
 }
@@ -173,8 +177,6 @@ export function routeSpeedLimit(car, progress = null) {
   const current = routeSection(car, s);
   let limit = current.speedLimit;
   if (current.kind === "onramp") {
-    // Build speed through the ramp and reach the merge at motorway speed.
-    // Both candidate projections and actual driving use this same profile.
     const progress = clamp(
       (s - current.startS) / (current.endS - current.startS),
       0,
@@ -185,8 +187,6 @@ export function routeSpeedLimit(car, progress = null) {
   }
   for (const section of car.route.sections) {
     if (section.startS <= s || section.speedLimit >= limit) continue;
-    // Match exit/town speed at the section boundary instead of abruptly
-    // changing speed limits after entering the lower-speed road.
     limit = Math.min(
       limit,
       Math.sqrt(
@@ -204,20 +204,23 @@ export function maneuverSteering(car, candidate) {
     return candidate?.steering ?? car.steering ?? 0;
   const near = nearestOnPath(car, car.route.points);
   const turn = uTurnApproach(car, near.s);
+  const isRightTurn = car.nav?.next_turn === "right" || (car.turn?.direction === "right");
   const lookahead = turn
     ? Math.min(candidate.lookahead_m || 6.0, Math.max(2.6, turn.distance_m))
-    : (candidate.lookahead_m || clamp(5.0 + Math.abs(car.speed) * 0.45, 5.0, 12.0));
+    : isRightTurn
+      ? clamp(7.5 + Math.abs(car.speed) * 0.35, 7.0, 11.0)
+      : (candidate.lookahead_m || clamp(5.0 + Math.abs(car.speed) * 0.45, 5.0, 12.0));
   const center = pointAt(car.route.points, near.s + lookahead);
   const tangent = center.heading ?? near.heading;
   const goal = move(center, tangent + Math.PI / 2, candidate.lane_offset_m);
 
   // Pure pursuit baseline curvature
   const purePursuitCurvature = (2 * Math.sin(angle(heading(car, goal) - car.heading))) /
-    Math.max(2.5, dist(car, goal));
+    Math.max(2.8, dist(car, goal));
 
   // Active Cross-Track Error (CTE) damping: Prevents right/left drift and centerline overshoot
   const lateralOffset = (car.x - near.x) * Math.cos(near.heading) + (car.z - near.z) * Math.sin(near.heading);
-  const cteCorrection = candidate.lane_offset_m === 0 ? -0.05 * lateralOffset : 0.0;
+  const cteCorrection = candidate.lane_offset_m === 0 ? -0.06 * lateralOffset : 0.0;
 
   return steeringForCurvature(
     purePursuitCurvature + cteCorrection,

@@ -376,3 +376,29 @@ export function predictTrafficConflict(vehicle, obstacles) {
   }
   return rearThreat;
 }
+
+export function hasRearObstacle(car, obstacles, maxDist = 12.0) {
+  if (!obstacles?.length) return false;
+  return obstacles.some((o) => {
+    const rel = relativeTrafficState(car, o);
+    return (
+      rel.ahead_m < 0 &&
+      rel.ahead_m > -maxDist &&
+      Math.abs(rel.right_m) < (car.width + (o.width || 1.8)) / 2 + 1.2
+    );
+  });
+}
+
+export function isPassingLaneClear(car, obstacles, side = -1) {
+  if (!obstacles?.length) return true;
+  const targetOffset = side * 2.8;
+  return !obstacles.some((o) => {
+    const rel = relativeTrafficState(car, o);
+    const inCorridor =
+      rel.ahead_m > -10.0 &&
+      rel.ahead_m < 32.0 &&
+      Math.sign(rel.right_m) === Math.sign(side) &&
+      Math.abs(rel.right_m - targetOffset) < 1.8;
+    return inCorridor;
+  });
+}
