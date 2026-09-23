@@ -63,7 +63,8 @@ export function steeringForCurvature(curvature, speed) {
 export function physics(car, steer, target, dt) {
   car.speed += clamp(target - car.speed, -BRAKING * dt, ACCELERATION * dt);
   const actual = car.wheelSteering ?? car.steering ?? 0;
-  car.wheelSteering = actual + clamp(steer - actual, -1.8 * dt, 1.8 * dt);
+  const maxSteerRate = clamp(2.4 + Math.abs(steer - actual) * 1.5, 2.0, 4.5);
+  car.wheelSteering = actual + clamp(steer - actual, -maxSteerRate * dt, maxSteerRate * dt);
   integratePose(car, car.wheelSteering, dt);
   car.steering = steer;
 }
@@ -204,14 +205,22 @@ export function maneuverSteering(car, candidate) {
   const near = nearestOnPath(car, car.route.points);
   const turn = uTurnApproach(car, near.s);
   const lookahead = turn
-    ? Math.min(candidate.lookahead_m, Math.max(2.6, turn.distance_m))
-    : candidate.lookahead_m;
+    ? Math.min(candidate.lookahead_m || 6.0, Math.max(2.6, turn.distance_m))
+    : (candidate.lookahead_m || clamp(5.0 + Math.abs(car.speed) * 0.45, 5.0, 12.0));
   const center = pointAt(car.route.points, near.s + lookahead);
   const tangent = center.heading ?? near.heading;
   const goal = move(center, tangent + Math.PI / 2, candidate.lane_offset_m);
+
+  // Pure pursuit baseline curvature
+  const purePursuitCurvature = (2 * Math.sin(angle(heading(car, goal) - car.heading))) /
+    Math.max(2.5, dist(car, goal));
+
+  // Active Cross-Track Error (CTE) damping: Prevents right/left drift and centerline overshoot
+  const lateralOffset = (car.x - near.x) * Math.cos(near.heading) + (car.z - near.z) * Math.sin(near.heading);
+  const cteCorrection = candidate.lane_offset_m === 0 ? -0.05 * lateralOffset : 0.0;
+
   return steeringForCurvature(
-    (2 * Math.sin(angle(heading(car, goal) - car.heading))) /
-      Math.max(2, dist(car, goal)),
+    purePursuitCurvature + cteCorrection,
     car.speed,
   );
 }

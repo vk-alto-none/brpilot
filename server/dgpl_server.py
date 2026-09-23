@@ -214,11 +214,16 @@ class DGPLJevPilotEvaluator:
                         if not props["in_lane"]:
                             score -= 30.0
                             
-                        score -= (props["route_error_m"] * 10.0)
-                        score -= (props["lane_error_m"] * 8.0)
+                        # Smooth, progressive lane centering
+                        score -= (props["route_error_m"] * 8.0)
+                        score -= (props["lane_error_m"] * 12.0)
                         score -= (props["heading_error_deg"] * 0.25)
                         score += (props["route_progress_m"] * 1.5)
                         score += (props["velocity_mps"] * 0.4)
+                        
+                        # Direct lane center stability bonus
+                        if abs(props["end_right"]) < 0.2:
+                            score += 10.0
                         
                         if props["stop_at_line"] and is_green_or_clear:
                             score -= 60.0

@@ -477,6 +477,7 @@ export function createDrivingPlan(
     const speedBonus = needsOvertake && data.velocity_mps > 0 ? data.velocity_mps * 4 : 0;
     const isCorridorAligned = needsOvertake && laneOffset !== null && Math.sign(laneOffset) === Math.sign(overtakeSide);
     const corridorBonus = isCorridorAligned ? 40 : 0;
+    const centeringBonus = !needsOvertake && laneOffset === 0.0 ? 15.0 : 0.0;
     const reversePenalty = data.velocity_mps < 0 && !recovering ? 500 : 0;
     const score =
       imminentCollision * 50000 +
@@ -493,7 +494,8 @@ export function createDrivingPlan(
           Math.abs(steering - (car.wheelSteering ?? car.steering)) * 0.4 +
           reversePenalty -
           speedBonus -
-          corridorBonus);
+          corridorBonus -
+          centeringBonus);
     return { data, projection, score };
   }
 
@@ -540,16 +542,16 @@ export function createDrivingPlan(
         : round(
             needsOvertake
               ? (i < 25 ? overtakeSide * 2.8 : i < 38 ? overtakeSide * 3.2 : (i % 2 === 0 ? overtakeSide * 3.6 : 0.0))
-              : (random() * 2 - 1) * (i < 14 ? 0.02 : i < 30 ? 0.15 : 0.35),
+              : (i < 35 ? 0.0 : (random() * 2 - 1) * 0.15),
             3,
           );
     const lookahead = recovering || isReverseCandidate
       ? null
       : round(
           clamp(
-            4.0 + Math.min(Math.max(car.speed, maxSpeed) * 0.35, 4.5) + random() * 0.5,
-            4.0,
-            8.5,
+            5.0 + Math.min(Math.max(car.speed, maxSpeed) * 0.45, 6.5) + (i % 4) * 0.25,
+            5.0,
+            12.0,
           ),
           2,
         );
