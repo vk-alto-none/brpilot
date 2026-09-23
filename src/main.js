@@ -148,6 +148,8 @@ $("app").innerHTML = `
       <select id="traffic-behavior-select" aria-label="Traffic behavior" title="Traffic Behavior Mode">
         <option value="standard" selected>🟢 Law-Abiding</option>
         <option value="aggressive">🟡 Aggressive</option>
+        <option value="jaywalking">🚶 Jaywalking Pedestrians</option>
+        <option value="indian_chaos">🇮🇳 Indian Chaos (Jaywalkers + Wrong-Way)</option>
         <option value="chaos">🔴 Lawless (Rulebreakers)</option>
       </select>
       <button id="new-world" class="icon-btn" title="Refresh world" aria-label="Refresh world">${icon("rotate-cw")}</button>
@@ -545,11 +547,15 @@ $("traffic-behavior-select").onchange = (e) => {
   const mode = e.target.value;
   sim.setTrafficBehavior(mode);
   toast(
-    mode === "chaos"
-      ? "🔴 Lawless Chaos Active — NPCs will run red lights & speed!"
-      : mode === "aggressive"
-        ? "🟡 Aggressive Traffic Active — Close following & fast acceleration"
-        : "🟢 Law-Abiding Traffic Active — Standard road rules",
+    mode === "indian_chaos"
+      ? "🇮🇳 Indian Chaos Active — Jaywalking pedestrians & wrong-way oncoming traffic!"
+      : mode === "jaywalking"
+        ? "🚶 Jaywalking Active — Pedestrians crossing roads arbitrarily mid-block!"
+        : mode === "chaos"
+          ? "🔴 Lawless Chaos Active — NPCs will run red lights & speed!"
+          : mode === "aggressive"
+            ? "🟡 Aggressive Traffic Active — Close following & fast acceleration"
+            : "🟢 Law-Abiding Traffic Active — Standard road rules",
   );
 };
 $("retry-drive").onclick = () => {

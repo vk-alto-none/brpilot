@@ -176,8 +176,41 @@ export class Simulation {
   setTrafficBehavior(behavior) {
     this.trafficBehavior = behavior;
     for (const v of this.traffic) {
-      v.obeysRules = behavior === "standard" ? true : (behavior === "aggressive" ? (this.r() > 0.3) : (this.r() > 0.8));
-      v.speedMultiplier = behavior === "chaos" ? (1.3 + this.r() * 0.5) : (behavior === "aggressive" ? 1.2 : 1.0);
+      if (behavior === "indian_chaos") {
+        v.obeysRules = this.r() > 0.85;
+        v.speedMultiplier = 1.25 + this.r() * 0.4;
+        v.isWrongWay = this.r() < 0.35;
+      } else if (behavior === "jaywalking") {
+        v.obeysRules = true;
+        v.speedMultiplier = 1.0;
+        v.isWrongWay = false;
+      } else if (behavior === "aggressive") {
+        v.obeysRules = this.r() > 0.3;
+        v.speedMultiplier = 1.2;
+        v.isWrongWay = false;
+      } else if (behavior === "chaos") {
+        v.obeysRules = this.r() > 0.8;
+        v.speedMultiplier = 1.3 + this.r() * 0.5;
+        v.isWrongWay = false;
+      } else {
+        v.obeysRules = true;
+        v.speedMultiplier = 1.0;
+        v.isWrongWay = false;
+      }
+    }
+
+    // Configure mid-block jaywalking for pedestrians
+    for (let i = 0; i < this.pedestrians.length; i++) {
+      const p = this.pedestrians[i];
+      if (behavior === "jaywalking" || behavior === "indian_chaos") {
+        p.midBlockCrossing = true;
+        p.crossProgress = p.crossProgress ?? (this.r() * 14);
+        p.crossDirection = p.crossDirection ?? (this.r() > 0.5 ? 1 : -1);
+        p.crossSpeed = 1.3 + this.r() * 0.6;
+        p.roadOffset = p.roadOffset ?? (p.walkPath ? this.r() * p.walkPath.length : 0);
+      } else {
+        p.midBlockCrossing = false;
+      }
     }
   }
 
@@ -187,28 +220,33 @@ export class Simulation {
       ? this.world.nodes.filter((node) => /^h\d+$/.test(node.id))
       : this.world.nodes;
 
+    const isIndianChaos = this.trafficBehavior === "indian_chaos";
+    const spawnWrongWay = isIndianChaos && (i % 3 === 0 || this.r() < 0.35);
+
     let ids;
     // 65% of vehicles spawn along or near the player's upcoming route
     if (!highway && i % 3 !== 0 && this.player.route?.ids?.length >= 3) {
       const playerIds = this.player.route.ids;
       const startIdx = Math.max(0, Math.min(playerIds.length - 3, Math.floor(this.r() * playerIds.length)));
       const subNodes = playerIds.slice(startIdx, startIdx + 4);
-      ids = subNodes.length >= 2 ? subNodes : playerIds.slice(0, 3);
+      const baseIds = subNodes.length >= 2 ? subNodes : playerIds.slice(0, 3);
+      ids = spawnWrongWay ? [...baseIds].reverse() : baseIds;
     } else {
       let a = choose(this.r, nodes),
         b = choose(
           this.r,
           nodes.filter((n) => dist(n, a) > 80),
         );
-      ids = highway
+      const rawIds = highway
         ? (i % 4 < 2 ? nodes : [...nodes].reverse()).map((node) => node.id)
         : shortestPath(this.world, a.id, b?.id || a.id);
+      ids = spawnWrongWay ? [...rawIds].reverse() : rawIds;
     }
     if (ids.length < 2) return;
     const route = makeRoute(
         this.world,
         ids,
-        this.world.type === "highway" && i % 2 === 0 ? 4.5 : undefined,
+        this.world.type === "highway" && i % 2 === 0 ? 4.5 : (spawnWrongWay ? -3 : undefined),
       ),
       s = this.r() * route.length,
       p = pointAt(route.points, s),
@@ -228,8 +266,21 @@ export class Simulation {
       stops: {},
       width: i % 4 === 0 ? 0.8 : 1.9,
       depth: i % 4 === 0 ? 2.3 : 4.2,
-      obeysRules: this.trafficBehavior === "standard" ? true : (this.trafficBehavior === "aggressive" ? (this.r() > 0.3) : (this.r() > 0.8)),
-      speedMultiplier: this.trafficBehavior === "chaos" ? (1.3 + this.r() * 0.5) : (this.trafficBehavior === "aggressive" ? 1.2 : 1.0),
+      isWrongWay: spawnWrongWay,
+      obeysRules: isIndianChaos
+        ? this.r() > 0.85
+        : this.trafficBehavior === "standard"
+          ? true
+          : this.trafficBehavior === "aggressive"
+            ? this.r() > 0.3
+            : this.r() > 0.8,
+      speedMultiplier: isIndianChaos
+        ? 1.25 + this.r() * 0.4
+        : this.trafficBehavior === "chaos"
+          ? 1.3 + this.r() * 0.5
+          : this.trafficBehavior === "aggressive"
+            ? 1.2
+            : 1.0,
       color: choose(this.r, [
         "#de8e69",
         "#e9be57",
@@ -550,7 +601,22 @@ export class Simulation {
     for (const p of this.pedestrians) {
       const node = this.world.byId[p.nodeId],
         walk = signalState(node, this.time, 0).walk;
-      if (p.crossing) {
+      if (p.midBlockCrossing && p.walkPath) {
+        p.crossProgress = (p.crossProgress ?? 0) + dt * (p.crossSpeed || 1.4) * (p.crossDirection || 1);
+        if (p.crossProgress >= 15 || p.crossProgress <= 0) {
+          p.crossProgress = clamp(p.crossProgress, 0, 15);
+          p.crossDirection = (p.crossDirection || 1) * -1;
+        }
+        const roadBase = move(p.walkPath.start, p.walkPath.heading, p.roadOffset || (p.walkPath.length * 0.5));
+        const perpHeading = p.walkPath.heading + Math.PI / 2;
+        const currentOffset = -7.5 + p.crossProgress;
+        const position = move(roadBase, perpHeading, currentOffset);
+        p.x = position.x;
+        p.z = position.z;
+        p.walking = true;
+        p.speed = p.crossSpeed || 1.4;
+        p.heading = p.crossDirection > 0 ? perpHeading : angle(perpHeading + Math.PI);
+      } else if (p.crossing) {
         if (walk && !p.walking && p.progress === 0) {
           const anyCar = [this.player, ...this.traffic].some(
             (v) => dist(v, node) < 13,
@@ -1135,7 +1201,7 @@ export class Simulation {
             }
           : {}),
         ...(o.type === "pedestrian"
-          ? { crossing: o.crossing && o.walking }
+          ? { crossing: (o.crossing || o.midBlockCrossing) && o.walking }
           : {}),
       });
     }
