@@ -700,7 +700,7 @@ $("download-json").onclick = () => {
       : JSON.stringify(inspectData(), null, 2),
     a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  a.download = `jev-${inspectorTab}-${sim.world.seed}.json`;
+  a.download = `brpilot-${inspectorTab}-${sim.world.seed}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
