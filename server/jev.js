@@ -118,7 +118,7 @@ export async function evaluate(state, env, signal, onUsage, clientApiKey = "") {
     if (!sel || !vectorAliases.includes(sel)) {
       throw new Error(`DGPL System-1 returned invalid candidate selection: ${sel}`);
     }
-    const selectedVectorAlias = sel;
+    selectedVectorAlias = sel;
 
     const neuralDist = prodData.decision?.distribution || {};
     const vectorDist = {};
