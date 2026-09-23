@@ -872,7 +872,7 @@ function getDGPLWebSocket() {
   return dgplWs;
 }
 
-function sendDGPLDecisionWS(payload, timeoutMs = 300) {
+function sendDGPLDecisionWS(payload, timeoutMs = 1200) {
   const ws = getDGPLWebSocket();
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     return Promise.reject(new Error("WebSocket not connected"));
@@ -968,7 +968,7 @@ async function decide() {
         task: "choice",
         state: `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${state.turn}`,
         candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
-      }, 350);
+      }, 1200);
 
       if (wsResp && wsResp.status === "success") {
         const sel = wsResp.decision?.selected;
