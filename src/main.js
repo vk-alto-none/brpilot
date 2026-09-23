@@ -1332,6 +1332,9 @@ function animate(now) {
   if (document.hidden || loading) return;
   touch.sync();
   if (!sim.paused && !sim.crash) {
+    if (sim.autopilot) {
+      decide();
+    }
     if (!sim.autopilot) {
       let steer = 0;
       const left = keys.has("KeyA") || keys.has("ArrowLeft");
@@ -1407,6 +1410,7 @@ refreshWorld();
 syncPilot();
 updateUI();
 requestAnimationFrame(animate);
+setInterval(decide, 25);
 finishLoading().catch(loadingFailed);
 let isKeyValid = false;
 let keyDebounceTimer = null;
