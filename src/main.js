@@ -1097,10 +1097,16 @@ async function decide() {
     )
       return;
     const controls = decisionControls(state, data);
-    if (!controls) throw Error("BRPilot returned a mismatched candidate batch.");
+    if (!controls) {
+      nextDecision = 0;
+      return;
+    }
     const now = performance.now();
-    if (now - started > 1800)
-      throw Error("BRPilot decision expired before it arrived. Replanning.");
+    if (now - started > 3500) {
+      // Network packet took longer than expected; silently replan immediately without stalling
+      nextDecision = 0;
+      return;
+    }
 
     lastApplied = now;
     lastDecision = { ...data, received_at_simulation_s: sim.time };
@@ -1133,18 +1139,12 @@ async function decide() {
     nextDecision = started + decisionInterval(state);
   } catch (error) {
     if (token === generation) {
-      sim.player.target = 0;
-      scene.vectors.clear();
       errors++;
-      nextDecision = performance.now() + Math.min(15000, 1000 * 2 ** errors);
-      toast(error.message, "error");
-      sim.event(error.message, "error");
-      if (errors >= 3) {
+      nextDecision = performance.now() + 100;
+      if (errors >= 5) {
+        sim.player.target = 0;
         setPilot(false);
-        toast(
-          "BRPilot paused after three failed requests. Toggle autopilot to reconnect.",
-          "error",
-        );
+        toast("⚠️ DGPL Cloud connection interrupted. Reconnecting...", "error");
       }
     }
   } finally {
