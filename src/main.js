@@ -1035,7 +1035,7 @@ async function decide() {
     const elapsedMs = performance.now() - tStart;
     const candidateProbs = {};
     candidateIds.forEach(id => {
-      candidateProbs[id] = dist[id] ?? (id === selectedChoice ? 0.85 : Number((0.15 / Math.max(1, candidateIds.length - 1)).toFixed(3)));
+      candidateProbs[id] = typeof dist[id] === "number" ? dist[id] : (id === selectedChoice ? 1.0 : 0.0);
     });
 
     const motionChoice = (state.speed_ceiling_mps === 0 && !emergencyMode) ? "stop" : "drive";

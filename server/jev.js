@@ -97,36 +97,36 @@ export async function evaluate(state, env, signal, onUsage, clientApiKey = "") {
     };
 
     let selectedVectorAlias = vectorAliases[0] || "v0";
-    try {
-      const res = await fetch(productionEndpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(dgplPayload),
-        signal: signal || AbortSignal.timeout(10000),
-      });
+    const res = await fetch(productionEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(dgplPayload),
+      signal: signal || AbortSignal.timeout(10000),
+    });
 
-      if (res.ok) {
-        const prodData = await res.json();
-        const sel = prodData.decision?.selected;
-        if (sel && vectorAliases.includes(sel)) {
-          selectedVectorAlias = sel;
-        }
-      }
-    } catch (err) {
-      // Graceful local engine fallback
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `DGPL System-1 API error: HTTP ${res.status}`);
     }
 
-    // Build probability distribution
+    const prodData = await res.json();
+    const sel = prodData.decision?.selected;
+    if (!sel || !vectorAliases.includes(sel)) {
+      throw new Error(`DGPL System-1 returned invalid candidate selection: ${sel}`);
+    }
+    const selectedVectorAlias = sel;
+
+    const neuralDist = prodData.decision?.distribution || {};
     const vectorDist = {};
     vectorAliases.forEach((alias) => {
-      vectorDist[alias] = alias === selectedVectorAlias ? 0.85 : Number((0.15 / Math.max(1, vectorAliases.length - 1)).toFixed(3));
+      vectorDist[alias] = typeof neuralDist[alias] === "number" ? neuralDist[alias] : (alias === selectedVectorAlias ? 1.0 : 0.0);
     });
 
     const motionChoice = state.speed_ceiling_mps === 0 ? "stop" : "drive";
     const motionProbs = motionChoice === "drive" ? { drive: 0.98, stop: 0.02 } : { drive: 0.05, stop: 0.95 };
 
     data = {
-      model: "DGPL-System1-v2.0 (Production API)",
+      model: prodData.decision?.model || "DGPL-System1-v2.0 (Neural Engine)",
       answers: {
         ...(requestQuestions.motion ? {
           motion: {
