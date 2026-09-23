@@ -26,6 +26,7 @@ import {
   Github,
   LogOut,
   Zap,
+  Key,
 } from "lucide";
 import { Simulation } from "./simulation.js";
 import { BackgroundPlanner } from "./background-planner.js";
@@ -69,6 +70,7 @@ const icons = {
   Github,
   LogOut,
   Zap,
+  Key,
 };
 const icon = (name) => `<i data-lucide="${name}"></i>`,
   $ = (id) => document.getElementById(id);
@@ -76,6 +78,13 @@ const params = new URLSearchParams(location.search),
   aliases = { suburb: "town", country: "highway" },
   requested = params.get("world") || "city",
   type = aliases[requested] || requested;
+
+// Auto-ingest API Key from URL param if provided (e.g. ?api_key=dgpl_live_...)
+const urlApiKey = params.get("api_key") || params.get("key");
+if (urlApiKey) {
+  localStorage.setItem("dgpl_api_key", urlApiKey.trim());
+}
+
 const sim = new Simulation(
   Number(params.get("seed")) || Math.floor(Math.random() * 999999),
   THEMES[type] ? type : "city",
@@ -114,7 +123,44 @@ const keys = new Set(),
   };
 $("app").innerHTML = `
 <main class="drive-area" aria-label="3D driving simulator"><canvas id="world-canvas" aria-label="Interactive three-dimensional driving world"></canvas><div id="vector-labels" aria-label="BRPilot motion vector probabilities"></div></main>
-<header class="topbar glass"><a href="/" class="brand" aria-label="BRPilot by DGPL"><img class="brand-mark" src="/brand/standard-agents-mark.svg" alt=""/><b>BRPilot</b></a><div class="world-picker"><select id="world-select" aria-label="World environment" title="Environment Scene"><option value="city">🏙️ Skyline City</option><option value="town">🏡 Small town</option><option value="highway">🛣️ Interstate 08</option></select><select id="traffic-density-select" aria-label="Traffic density" title="Traffic Density Level"><option value="0">🚫 No Traffic (0)</option><option value="6">🚗 Low Traffic (6)</option><option value="16" selected>🚗 Standard Traffic (16)</option><option value="35">🚙 Heavy Traffic (35)</option><option value="65">🏎️ Extreme Chaos (65)</option></select><select id="traffic-behavior-select" aria-label="Traffic behavior" title="Traffic Behavior Mode"><option value="standard" selected>🟢 Law-Abiding</option><option value="aggressive">🟡 Aggressive</option><option value="chaos">🔴 Lawless (Rulebreakers)</option></select><button id="new-world" title="Refresh world" aria-label="Refresh world">${icon("rotate-cw")}</button><a id="github-link" href="https://github.com/vk-alto-none/jevpilot" target="_blank" rel="noopener noreferrer" aria-label="View BRPilot on GitHub (opens in a new tab)" title="View on GitHub">${icon("github")}</a></div></header>
+<header class="topbar glass">
+  <div class="topbar-left">
+    <a href="/" class="brand" aria-label="BRPilot by DGPL">
+      <img class="brand-mark" src="/brand/standard-agents-mark.svg" alt=""/>
+      <b>BRPilot</b>
+      <span class="brand-badge">DGPL Cloud</span>
+    </a>
+  </div>
+  <div class="topbar-center">
+    <div class="world-picker">
+      <select id="world-select" aria-label="World environment" title="Environment Scene">
+        <option value="city">🏙️ Skyline City</option>
+        <option value="town">🏡 Small town</option>
+        <option value="highway">🛣️ Interstate 08</option>
+      </select>
+      <select id="traffic-density-select" aria-label="Traffic density" title="Traffic Density Level">
+        <option value="0">🚫 No Traffic (0)</option>
+        <option value="6">🚗 Low Traffic (6)</option>
+        <option value="16" selected>🚗 Standard Traffic (16)</option>
+        <option value="35">🚙 Heavy Traffic (35)</option>
+        <option value="65">🏎️ Extreme Chaos (65)</option>
+      </select>
+      <select id="traffic-behavior-select" aria-label="Traffic behavior" title="Traffic Behavior Mode">
+        <option value="standard" selected>🟢 Law-Abiding</option>
+        <option value="aggressive">🟡 Aggressive</option>
+        <option value="chaos">🔴 Lawless (Rulebreakers)</option>
+      </select>
+      <button id="new-world" class="icon-btn" title="Refresh world" aria-label="Refresh world">${icon("rotate-cw")}</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button id="key-modal-btn" class="key-pill-btn" title="DGPL System-1 API Connection">
+      <span id="key-status-dot-pill" class="pill-dot pill-dot-offline"></span>
+      <span id="key-badge-text">🔒 Connect API Key</span>
+    </button>
+    <a id="github-link" class="icon-btn" href="https://github.com/vk-alto-none/brpilot" target="_blank" rel="noopener noreferrer" aria-label="View BRPilot on GitHub" title="View on GitHub">${icon("github")}</a>
+  </div>
+</header>
 <div class="navigation-hud"><div class="navigation-card glass"><span id="turn-icon">${icon("arrow-up")}</span><div><strong id="next-maneuver">Continue straight</strong><span id="turn-distance"></span></div><span class="nav-divider"></span><span id="remaining"></span><button id="map-toggle" aria-label="Toggle route map" aria-pressed="true" title="Hide route map">${icon("map")}</button></div>
 <div id="minimap" class="minimap glass"><div class="minimap-toolbar" role="toolbar" aria-label="Minimap controls"><button id="map-drag" aria-label="Move minimap" title="Move minimap · drag or use arrow keys">${icon("grip")}</button><div><button id="map-zoom-out" aria-label="Zoom out" title="Zoom out">${icon("minus")}</button><button id="map-zoom-in" aria-label="Zoom in" title="Zoom in">${icon("plus")}</button><button id="map-reset" aria-label="Reset minimap" title="Reset map position, zoom and following">${icon("rotate-ccw")}</button></div></div><canvas id="map-canvas" width="380" height="310" aria-label="Route map. Drag to pan, scroll to zoom, double-click to follow the car."></canvas></div></div>
 <div id="paused-overlay" hidden><div class="glass"><span>${icon("pause")} Paused</span><button id="resume" class="primary">Resume driving</button></div></div>
@@ -122,6 +168,55 @@ $("app").innerHTML = `
 <div class="bottom-hud"><div class="driver-dock glass"><div class="speed-cluster"><div title="Current speed"><strong id="speed">0</strong><span>km/h</span></div><span class="speed-limit" title="Speed limit"><small>LIMIT</small><b id="speed-limit">50</b></span></div><span class="dock-divider"></span><div class="pilot-actions"><button id="autopilot" class="pilot-button" role="switch" aria-checked="false" aria-label="BRPilot autopilot" title="Engage BRPilot · J">${icon("sparkles")}<span id="pilot-label">Engage BRPilot</span><kbd>J</kbd></button><button id="rush-toggle" class="rush-button" role="switch" aria-checked="false" aria-label="Toggle Rush Super Driver Mode" title="Rush Super Driver Mode · R">${icon("zap")}<span id="rush-label">Rush Mode</span><kbd>R</kbd></button><button id="emergency-toggle" class="emergency-button" role="switch" aria-checked="false" aria-label="Toggle Emergency Ambulance Mode" title="Emergency Ambulance Mode · E"><span class="siren-emoji">🚨</span><span id="emergency-label">Ambulance</span><kbd>E</kbd></button><button id="candidates-toggle" class="candidate-button" aria-label="Show steering candidates" aria-pressed="false" title="Show steering candidates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V3m-3 3 3-3 3 3M12 20C12 14 7 12 3 8m0 3V8h3M12 20c0-6 5-8 9-12m-3 0h3v3"/><circle cx="12" cy="21" r="1" fill="currentColor" stroke="none"/></svg></button></div><div id="decision-status"><span id="pilot-state">Free play</span><span id="context-message">WASD to drive · Space to brake</span><span class="cost-total" title="Estimated cost from BRPilot token usage and configured pricing."><span id="cost-label">Session</span> <strong id="cost">$0.000000</strong></span></div><span class="dock-divider"></span><div class="dock-tools" role="group" aria-label="View and driving controls"><button id="camera" title="Change camera · C" aria-label="Change camera">${icon("video")}<span id="camera-name">Chase</span></button><button id="scene-json" aria-label="Inspect live JSON" title="Inspect live JSON">${icon("braces")}</button><button id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icon("maximize")}</button><span class="divider"></span><button id="pause" aria-label="Pause simulation" title="Pause · P">${icon("pause")}</button><button id="sign-out" hidden aria-label="Sign out" title="Sign out">${icon("log-out")}</button></div></div></div>
 <dialog id="crash-dialog" aria-labelledby="crash-title" aria-describedby="crash-description"><span class="crash-symbol">${icon("x")}</span><span class="eyebrow">DRIVE ENDED</span><h1 id="crash-title">Game over.</h1><p id="crash-description"></p><div class="crash-stats"><div><strong id="crash-speed"></strong><span>km/h at impact</span></div><div><strong id="crash-distance"></strong><span>meters driven</span></div></div><button id="retry-drive" class="primary">${icon("rotate-ccw")} Restart drive</button><button id="crash-new-world" class="secondary">Try a new world ${icon("arrow-up-right")}</button></dialog>
 <dialog id="credit-dialog" aria-labelledby="credit-title"><span class="eyebrow">THANKS FOR TAKING A DRIVE</span><h2 id="credit-title">That's your free lap.</h2><p>Your $0.25 of BRPilot play credit has been used. You can keep exploring with manual controls.</p><button id="credit-close" class="primary">Keep driving manually</button><a href="https://durbhasigurukulam.com/" target="_blank" rel="noopener noreferrer">Explore DGPL ↗</a></dialog>
+<dialog id="key-dialog" class="glass-dialog">
+  <div class="key-modal-card">
+    <div class="key-modal-header">
+      <div class="key-modal-title">
+        ${icon("key")}
+        <div>
+          <h3>DGPL System-1 Cloud Engine</h3>
+          <span class="sub-label">Autonomous Neural Decision Stream</span>
+        </div>
+      </div>
+      <button id="close-key-dialog" class="close-btn" aria-label="Close dialog">${icon("x")}</button>
+    </div>
+    
+    <div class="key-modal-body">
+      <p class="key-modal-desc">
+        BRPilot is strictly powered by <strong>DGPL System-1 Online Cloud Inference</strong>. Real-time path trajectories, collision avoidance, and steering decisions are computed over our sub-5ms low-latency WebSocket stream.
+      </p>
+      
+      <div class="key-input-container">
+        <div class="input-label-row">
+          <label for="dgpl-key-input">Your DGPL Live API Key</label>
+          <span id="key-validation-badge" class="badge-neutral">Awaiting Input</span>
+        </div>
+        <div class="input-wrapper">
+          <input type="text" id="dgpl-key-input" placeholder="dgpl_live_..." autocomplete="off" spellcheck="false" />
+        </div>
+      </div>
+      
+      <div id="key-status-banner" class="status-banner banner-offline">
+        <div class="status-icon" id="banner-status-icon">${icon("circle-help")}</div>
+        <div class="status-text-block">
+          <strong id="banner-status-title">Offline Mode</strong>
+          <span id="banner-status-detail">Please enter an active DGPL API key to enable autonomous cloud driving.</span>
+        </div>
+      </div>
+      
+      <div class="key-modal-actions">
+        <button id="save-key-btn" class="btn-primary">Save & Connect ⚡</button>
+        <button id="test-key-btn" class="btn-secondary">Test Connection ⏱️</button>
+        <button id="clear-key-btn" class="btn-subtle">Clear Key</button>
+      </div>
+      
+      <div class="key-modal-footer">
+        <span>Need a free API key?</span>
+        <a href="https://br.durbhasigurukulam.com/#keys" target="_blank" rel="noopener noreferrer">Generate Auto-Approved Key on DGPL Platform ↗</a>
+      </div>
+    </div>
+  </div>
+</dialog>
 <div id="toast" role="status" hidden></div>
 <dialog id="json-dialog"><div class="json-header"><div>${icon("braces")}<strong>Under the hood</strong><span id="json-live">LIVE · 4 Hz</span></div><button id="close-json" aria-label="Close JSON inspector">${icon("x")}</button></div><div class="json-toolbar"><div class="json-tabs"><button data-tab="request" class="active">BRPilot input</button><button data-tab="sensor">Perception</button><button data-tab="world">Full world</button><button data-tab="decision">Response</button></div><div class="json-actions"><button id="freeze-json">Freeze</button><button id="copy-json" aria-label="Copy displayed JSON">${icon("copy")} <span id="copy-json-label" aria-live="polite">Copy</span></button><button id="download-json">${icon("download")} Download</button></div></div><p id="json-description">Exact BRPilot API payload, including instructions and offered choices. Full geometry and control details stay local.</p><pre id="json-content"></pre></dialog>
 <dialog id="help-dialog"><button id="close-help" class="dialog-close" aria-label="Close help">${icon("x")}</button><span class="eyebrow">YOUR NEXT DRIVE</span><h2>Take the wheel.</h2><p class="touch-help">Use the thumbstick to steer. Push up to accelerate, pull down to brake and reverse. Release to coast; hold Brake to stop.</p><div class="help-keys"><span><kbd>W / ↑</kbd> Hold accelerator</span><span><kbd>S / ↓</kbd> Brake / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>J</kbd> BRPilot autopilot</span><span><kbd>C</kbd> Camera</span><span><kbd>P</kbd> Pause</span><span><kbd>?</kbd> Keyboard help</span></div><p>Drag the scene to orbit in Chase or Bird’s eye; drag to look around in Driver view. Scroll to zoom outside; double-click to recenter. Tap A/D for small corrections; hold for a sharper turn and release to recenter. Hold W to accelerate; release to coast with drag. S brakes, then reverses once stopped. Space applies the brake. Autopilot sets target speed directly.</p><p>The bright blue line is BRPilot's selected three-second plan. Use Candidates to see the sampled paths: forward in blue/cyan, reverse in purple, lane departures in amber, and predicted collisions in orange. Choice probabilities are available in the JSON inspector. The safety brake can reduce speed for a missed hazard; interventions are shown beside the autopilot button.</p><p class="asset-credits">Vehicle: <a href="https://sketchfab.com/3d-models/tesla-model-y-2021-c0a86cac582d4b33aba0fb1b1912d970" target="_blank" rel="noreferrer">Tesla Model Y 2021</a> by 763468712, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Geometry adapted by Tina 3D Tesla; optimized, re-materialed, and wheel-rigged for BRPilot. Tree, shrub, streetlight, surface textures and sky: <a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven</a>, CC0.</p><p>Driving keys take back control. Use the JSON button for live inputs, full world state, probabilities, and session telemetry.</p></dialog>`;
@@ -272,12 +367,14 @@ function syncPilot() {
 function setPilot(on) {
   if (loading) return;
   touch.reset();
-  if (on && playCredits?.exhausted) {
-    $("credit-dialog").showModal();
+  const apiKey = localStorage.getItem("dgpl_api_key") || "";
+  if (on && !apiKey) {
+    toast("🔒 DGPL System-1 API Key Required. Autopilot is powered exclusively by DGPL Cloud.", "error");
+    $("key-dialog").showModal();
     return;
   }
   if (on && !configured) {
-    toast("BRPilot is not connected. Check the API key on the server.", "error");
+    toast("⚠️ DGPL System-1 Cloud is unreachable. Autopilot requires live cloud connectivity.", "error");
     return;
   }
   if (sim.crash || (on && sim.complete)) return;
@@ -724,6 +821,13 @@ let wsConnecting = false;
 
 function getDGPLWebSocket() {
   const apiKey = localStorage.getItem("dgpl_api_key") || "";
+  if (!apiKey) {
+    if (dgplWs) {
+      try { dgplWs.close(); } catch (e) {}
+      dgplWs = null;
+    }
+    return null;
+  }
   const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://br.durbhasigurukulam.com/ws/v1/stream";
   
   if (dgplWs && (dgplWs.readyState === WebSocket.OPEN || dgplWs.readyState === WebSocket.CONNECTING)) {
@@ -736,6 +840,7 @@ function getDGPLWebSocket() {
     
     dgplWs.onopen = () => {
       console.log("[DGPL WebSocket] Persistent live stream connected.");
+      updateKeyStatusUI();
     };
     
     dgplWs.onmessage = (event) => {
@@ -753,13 +858,16 @@ function getDGPLWebSocket() {
     
     dgplWs.onerror = (err) => {
       console.warn("[DGPL WebSocket] Stream error:", err);
+      updateKeyStatusUI();
     };
     
     dgplWs.onclose = () => {
       dgplWs = null;
+      updateKeyStatusUI();
     };
   } catch (e) {
     dgplWs = null;
+    updateKeyStatusUI();
   }
   return dgplWs;
 }
@@ -842,11 +950,19 @@ async function decide() {
     const apiKey = localStorage.getItem("dgpl_api_key") || "";
 
     const tStart = performance.now();
-    let selectedChoice = candidateIds[0] || "v0";
+    let selectedChoice = null;
     let dist = {};
+    let cloudSuccess = false;
 
+    if (!apiKey) {
+      setPilot(false);
+      const pilotStateEl = $("pilot-state");
+      if (pilotStateEl) pilotStateEl.textContent = "🔒 API Key Required";
+      return;
+    }
+
+    // 1. Primary Ultra-fast WebSocket Stream (Sub-5ms)
     try {
-      // 1. Ultra-fast WebSocket Stream
       const wsResp = await sendDGPLDecisionWS({
         type: "decision",
         task: "choice",
@@ -860,11 +976,12 @@ async function decide() {
           selectedChoice = sel;
         }
         dist = wsResp.decision?.distribution || {};
-      } else {
-        throw new Error("WS non-success");
+        cloudSuccess = true;
       }
-    } catch (wsErr) {
-      // 2. High-reliability REST Fallback
+    } catch (wsErr) {}
+
+    // 2. High-reliability REST Fallback
+    if (!cloudSuccess) {
       try {
         const res = await fetch(prodEndpoint, {
           method: "POST",
@@ -888,9 +1005,32 @@ async function decide() {
             selectedChoice = sel;
           }
           dist = prodData.decision?.distribution || {};
+          cloudSuccess = true;
+        } else if (res.status === 401 || res.status === 403) {
+          errors++;
+          setPilot(false);
+          toast("❌ Invalid or Expired DGPL API Key. Autopilot disengaged.", "error");
+          $("key-dialog").showModal();
+          return;
+        } else if (res.status === 429) {
+          errors++;
+          toast("⚠️ DGPL Cloud Rate Limit reached (1,000 req/min). Throttling...", "error");
+          nextDecision = now + 1000;
+          return;
         }
       } catch (httpErr) {}
     }
+
+    if (!cloudSuccess || !selectedChoice) {
+      errors++;
+      if (errors >= 3) {
+        setPilot(false);
+        toast("⚠️ DGPL System-1 Cloud Connection Lost. Autopilot disengaged.", "error");
+      }
+      return;
+    }
+
+    errors = 0;
 
     const elapsedMs = performance.now() - tStart;
     const candidateProbs = {};
@@ -1266,23 +1406,236 @@ syncPilot();
 updateUI();
 requestAnimationFrame(animate);
 finishLoading().catch(loadingFailed);
-setInterval(decide, 25);
-// Connect to DGPL BRPilot Production Decision Engine
-const prodHealthUrl = localStorage.getItem("dgpl_health_url") || "https://br.durbhasigurukulam.com/api/v1/health";
-fetch(prodHealthUrl)
-  .then((r) => r.json())
-  .then((data) => {
-    configured = true;
-    authRequired = false;
-    getDGPLWebSocket(); // Pre-warm persistent WebSocket stream
-    updateCredits(100.0);
-    $("sign-out").hidden = true;
-    updateCostTooltip({ input_per_million: 0.10, output_per_million: 0.10 });
-    console.log("[DGPL BRPilot] Engine Online:", data);
-  })
-  .catch(() => {
-    configured = true;
-    getDGPLWebSocket();
-  });
+let isKeyValid = false;
+let keyDebounceTimer = null;
+
+function updateModalBanner(state, title, detail, badgeText, badgeClass) {
+  const badge = $("key-validation-badge");
+  const banner = $("key-status-banner");
+  const bannerTitle = $("banner-status-title");
+  const bannerDetail = $("banner-status-detail");
+  
+  if (badge) {
+    badge.textContent = badgeText;
+    badge.className = badgeClass;
+  }
+  if (banner) {
+    banner.className = `status-banner banner-${state}`;
+  }
+  if (bannerTitle) bannerTitle.textContent = title;
+  if (bannerDetail) bannerDetail.textContent = detail;
+}
+
+function updateTopbarPill(text, dotClass) {
+  const keyBtnText = $("key-badge-text");
+  const keyStatusDot = $("key-status-dot-pill");
+  if (keyBtnText) keyBtnText.textContent = text;
+  if (keyStatusDot) keyStatusDot.className = `pill-dot ${dotClass}`;
+}
+
+async function validateAndConnectKey(rawKey, notify = false) {
+  const key = (rawKey || "").trim();
+  
+  if (!key) {
+    isKeyValid = false;
+    localStorage.removeItem("dgpl_api_key");
+    updateTopbarPill("🔒 Connect API Key", "pill-dot-offline");
+    updateModalBanner(
+      "offline",
+      "Offline Mode",
+      "Please enter an active DGPL API key to enable autonomous cloud driving.",
+      "Awaiting Input",
+      "badge-neutral"
+    );
+    if (dgplWs) {
+      try { dgplWs.close(); } catch(e){}
+      dgplWs = null;
+    }
+    return { valid: false, reason: "EMPTY" };
+  }
+
+  updateTopbarPill("🟡 Verifying...", "pill-dot-idle");
+  updateModalBanner(
+    "idle",
+    "Verifying Key...",
+    "Connecting to DGPL System-1 Cloud inference endpoint...",
+    "Verifying...",
+    "badge-neutral"
+  );
+
+  try {
+    const t0 = performance.now();
+    const res = await fetch("https://br.durbhasigurukulam.com/api/v1/systemone", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-DGPL-API-Key": key
+      },
+      body: JSON.stringify({
+        task: "choice",
+        state: "key_handshake_verification",
+        candidates: ["v0", "v1"]
+      }),
+      signal: AbortSignal.timeout(4000)
+    });
+
+    const elapsed = Math.round(performance.now() - t0);
+
+    if (res.ok) {
+      const data = await res.json();
+      isKeyValid = true;
+      localStorage.setItem("dgpl_api_key", key);
+      configured = true;
+      
+      const tierName = (data.key_tier || "Enterprise").toUpperCase();
+      updateTopbarPill(`⚡ DGPL Cloud (${elapsed}ms)`, "pill-dot-live");
+      updateModalBanner(
+        "live",
+        "⚡ DGPL Cloud Connected",
+        `Active & Ready · Latency: ${elapsed}ms · Tier: ${tierName}`,
+        `Valid (${tierName})`,
+        "badge-valid"
+      );
+      
+      if (notify) toast(`⚡ DGPL Cloud Connected! Verified in ${elapsed}ms. Autopilot Ready.`, "info");
+      getDGPLWebSocket();
+      return { valid: true, latency: elapsed, tier: data.key_tier };
+    } else {
+      isKeyValid = false;
+      let errDetail = "Invalid API key provided.";
+      try {
+        const errJson = await res.json();
+        if (errJson.detail) errDetail = errJson.detail;
+      } catch(e){}
+
+      updateTopbarPill("❌ Invalid Key", "pill-dot-error");
+      updateModalBanner(
+        "error",
+        "❌ Authentication Failed",
+        `Server returned ${res.status}: ${errDetail}`,
+        "Invalid Key",
+        "badge-invalid"
+      );
+      
+      if (notify) toast(`❌ Invalid DGPL API Key: ${errDetail}. Autopilot disabled.`, "error");
+      
+      if (dgplWs) {
+        try { dgplWs.close(); } catch(e){}
+        dgplWs = null;
+      }
+      return { valid: false, status: res.status, reason: errDetail };
+    }
+  } catch (err) {
+    isKeyValid = false;
+    updateTopbarPill("⚠️ Cloud Offline", "pill-dot-offline");
+    updateModalBanner(
+      "error",
+      "⚠️ Cloud Unreachable",
+      `Network error: ${err.message}`,
+      "Unreachable",
+      "badge-invalid"
+    );
+    if (notify) toast(`⚠️ DGPL Cloud is unreachable (${err.message})`, "error");
+    return { valid: false, reason: err.message };
+  }
+}
+
+// API Key Dialog Event Listeners
+if ($("key-modal-btn")) {
+  $("key-modal-btn").onclick = () => {
+    const currentKey = localStorage.getItem("dgpl_api_key") || "";
+    if ($("dgpl-key-input")) {
+      $("dgpl-key-input").value = currentKey;
+    }
+    if (currentKey) {
+      validateAndConnectKey(currentKey, false);
+    } else {
+      updateModalBanner(
+        "offline",
+        "Offline Mode",
+        "Please enter an active DGPL API key to enable autonomous cloud driving.",
+        "Awaiting Input",
+        "badge-neutral"
+      );
+    }
+    $("key-dialog").showModal();
+  };
+}
+
+// Debounced Real-time input validation
+if ($("dgpl-key-input")) {
+  $("dgpl-key-input").oninput = () => {
+    clearTimeout(keyDebounceTimer);
+    const val = $("dgpl-key-input").value.trim();
+    if (!val) {
+      updateModalBanner(
+        "offline",
+        "Offline Mode",
+        "Please enter an active DGPL API key to enable autonomous cloud driving.",
+        "Awaiting Input",
+        "badge-neutral"
+      );
+      updateTopbarPill("🔒 Connect API Key", "pill-dot-offline");
+      return;
+    }
+    
+    updateModalBanner(
+      "idle",
+      "Verifying...",
+      "Validating key with DGPL Cloud inference gateway...",
+      "Verifying...",
+      "badge-neutral"
+    );
+    
+    keyDebounceTimer = setTimeout(() => {
+      validateAndConnectKey(val, false);
+    }, 300);
+  };
+}
+
+if ($("close-key-dialog")) {
+  $("close-key-dialog").onclick = () => $("key-dialog").close();
+}
+
+if ($("save-key-btn")) {
+  $("save-key-btn").onclick = async () => {
+    const key = $("dgpl-key-input").value.trim();
+    if (key) {
+      const res = await validateAndConnectKey(key, true);
+      if (res.valid) {
+        $("key-dialog").close();
+      }
+    } else {
+      await validateAndConnectKey("", true);
+      $("key-dialog").close();
+    }
+  };
+}
+
+if ($("clear-key-btn")) {
+  $("clear-key-btn").onclick = async () => {
+    $("dgpl-key-input").value = "";
+    await validateAndConnectKey("", true);
+    $("key-dialog").close();
+  };
+}
+
+if ($("test-key-btn")) {
+  $("test-key-btn").onclick = async () => {
+    const key = $("dgpl-key-input").value.trim();
+    await validateAndConnectKey(key, true);
+  };
+}
+
+// Auto-check URL parameters or local storage on boot
+const initialKey = (urlApiKey || localStorage.getItem("dgpl_api_key") || "").trim();
+
+if (initialKey) {
+  validateAndConnectKey(initialKey, false);
+} else {
+  validateAndConnectKey("", false);
+}
 
 export { sim, scene };
+
+
