@@ -474,8 +474,8 @@ export class Simulation {
       : ((v.obeysRules ?? true) && this.trafficBehavior !== "chaos");
 
     if (shouldObeyStopRule && rule.mustStop && rule.distance > -12) {
-      const stopDistance = Math.max(0, rule.distance - v.depth / 2 - 0.2);
-      const cap = stopDistance <= 0.05 ? 0 : Math.sqrt(2 * 5 * stopDistance);
+      const stopDistance = Math.max(0, rule.distance - v.depth / 2 - 1.2);
+      const cap = stopDistance <= 0.15 ? 0 : Math.sqrt(2 * 4.0 * stopDistance);
       if (cap < max) {
         max = cap;
         reason = rule.reason;
@@ -1203,10 +1203,10 @@ export class Simulation {
           (["left", "right"].includes(nav.next_turn) &&
             nav.turn_distance_m < 24)
         ? nav.next_turn === "right"
-          ? (this.rush_mode ? 10 : 8.5)
-          : (this.rush_mode ? 11 : 9.5)
+          ? (this.rush_mode ? 5.5 : 4.2)
+          : (this.rush_mode ? 6.0 : 4.8)
         : ["left", "right"].includes(nav.next_turn) && nav.turn_distance_m < 48
-          ? 12
+          ? 7.5
           : this.world.theme.limit;
     const baseLimit = this.rush_mode ? Math.max(30.0, this.world.theme.limit) : this.world.theme.limit;
     const ceiling = this.emergencyMode
