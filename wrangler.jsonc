@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "jevpilot",
+  "name": "brpilot",
   "account_id": "fd9e24c9339e83e73661475690574340",
   "main": "server/worker.js",
   "compatibility_date": "2026-09-17",
@@ -8,7 +8,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
-    { "pattern": "jevpilot.standardagents.ai", "custom_domain": true },
+    { "pattern": "br.durbhasigurukulam.com", "custom_domain": true },
   ],
   "assets": {
     "directory": "dist",
@@ -34,7 +34,7 @@
     },
   ],
   "vars": {
-    "APP_ORIGIN": "https://jevpilot.standardagents.ai",
+    "APP_ORIGIN": "https://br.durbhasigurukulam.com",
     "PLATFORM_URL": "https://api.standardagents.ai",
     "PLATFORM_PROJECT_ID": "c95d8b94-38b6-4130-92ae-17de0c29c0ed",
     "JEV_INPUT_PRICE": "0.042",

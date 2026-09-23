@@ -113,18 +113,18 @@ const keys = new Set(),
     intervals: [],
   };
 $("app").innerHTML = `
-<main class="drive-area" aria-label="3D driving simulator"><canvas id="world-canvas" aria-label="Interactive three-dimensional driving world"></canvas><div id="vector-labels" aria-label="Jev motion vector probabilities"></div></main>
-<header class="topbar glass"><a href="/" class="brand" aria-label="JevPilot by Standard Agents"><img class="brand-mark" src="/brand/standard-agents-mark.svg" alt=""/><b>JevPilot</b></a><div class="world-picker"><select id="world-select" aria-label="World environment" title="Environment Scene"><option value="city">🏙️ Skyline City</option><option value="town">🏡 Small town</option><option value="highway">🛣️ Interstate 08</option></select><select id="traffic-density-select" aria-label="Traffic density" title="Traffic Density Level"><option value="0">🚫 No Traffic (0)</option><option value="6">🚗 Low Traffic (6)</option><option value="16" selected>🚗 Standard Traffic (16)</option><option value="35">🚙 Heavy Traffic (35)</option><option value="65">🏎️ Extreme Chaos (65)</option></select><select id="traffic-behavior-select" aria-label="Traffic behavior" title="Traffic Behavior Mode"><option value="standard" selected>🟢 Law-Abiding</option><option value="aggressive">🟡 Aggressive</option><option value="chaos">🔴 Lawless (Rulebreakers)</option></select><button id="new-world" title="Refresh world" aria-label="Refresh world">${icon("rotate-cw")}</button><a id="github-link" href="https://github.com/standardagents/jevpilot" target="_blank" rel="noopener noreferrer" aria-label="View JevPilot on GitHub (opens in a new tab)" title="View on GitHub">${icon("github")}</a></div></header>
+<main class="drive-area" aria-label="3D driving simulator"><canvas id="world-canvas" aria-label="Interactive three-dimensional driving world"></canvas><div id="vector-labels" aria-label="BRPilot motion vector probabilities"></div></main>
+<header class="topbar glass"><a href="/" class="brand" aria-label="BRPilot by DGPL"><img class="brand-mark" src="/brand/standard-agents-mark.svg" alt=""/><b>BRPilot</b></a><div class="world-picker"><select id="world-select" aria-label="World environment" title="Environment Scene"><option value="city">🏙️ Skyline City</option><option value="town">🏡 Small town</option><option value="highway">🛣️ Interstate 08</option></select><select id="traffic-density-select" aria-label="Traffic density" title="Traffic Density Level"><option value="0">🚫 No Traffic (0)</option><option value="6">🚗 Low Traffic (6)</option><option value="16" selected>🚗 Standard Traffic (16)</option><option value="35">🚙 Heavy Traffic (35)</option><option value="65">🏎️ Extreme Chaos (65)</option></select><select id="traffic-behavior-select" aria-label="Traffic behavior" title="Traffic Behavior Mode"><option value="standard" selected>🟢 Law-Abiding</option><option value="aggressive">🟡 Aggressive</option><option value="chaos">🔴 Lawless (Rulebreakers)</option></select><button id="new-world" title="Refresh world" aria-label="Refresh world">${icon("rotate-cw")}</button><a id="github-link" href="https://github.com/vk-alto-none/jevpilot" target="_blank" rel="noopener noreferrer" aria-label="View BRPilot on GitHub (opens in a new tab)" title="View on GitHub">${icon("github")}</a></div></header>
 <div class="navigation-hud"><div class="navigation-card glass"><span id="turn-icon">${icon("arrow-up")}</span><div><strong id="next-maneuver">Continue straight</strong><span id="turn-distance"></span></div><span class="nav-divider"></span><span id="remaining"></span><button id="map-toggle" aria-label="Toggle route map" aria-pressed="true" title="Hide route map">${icon("map")}</button></div>
 <div id="minimap" class="minimap glass"><div class="minimap-toolbar" role="toolbar" aria-label="Minimap controls"><button id="map-drag" aria-label="Move minimap" title="Move minimap · drag or use arrow keys">${icon("grip")}</button><div><button id="map-zoom-out" aria-label="Zoom out" title="Zoom out">${icon("minus")}</button><button id="map-zoom-in" aria-label="Zoom in" title="Zoom in">${icon("plus")}</button><button id="map-reset" aria-label="Reset minimap" title="Reset map position, zoom and following">${icon("rotate-ccw")}</button></div></div><canvas id="map-canvas" width="380" height="310" aria-label="Route map. Drag to pan, scroll to zoom, double-click to follow the car."></canvas></div></div>
 <div id="paused-overlay" hidden><div class="glass"><span>${icon("pause")} Paused</span><button id="resume" class="primary">Resume driving</button></div></div>
 <div id="arrival" class="arrival glass" hidden><span class="arrival-mark">${icon("flag")}</span><span class="eyebrow">DESTINATION REACHED</span><h1>You made it.</h1><p id="arrival-summary"></p><button id="next-trip" class="primary">Next drive ${icon("arrow-up-right")}</button><button id="keep-driving" class="subtle">Keep exploring</button></div>
-<div class="bottom-hud"><div class="driver-dock glass"><div class="speed-cluster"><div title="Current speed"><strong id="speed">0</strong><span>km/h</span></div><span class="speed-limit" title="Speed limit"><small>LIMIT</small><b id="speed-limit">50</b></span></div><span class="dock-divider"></span><div class="pilot-actions"><button id="autopilot" class="pilot-button" role="switch" aria-checked="false" aria-label="Jev autopilot" title="Engage Jev · J">${icon("sparkles")}<span id="pilot-label">Engage Jev</span><kbd>J</kbd></button><button id="rush-toggle" class="rush-button" role="switch" aria-checked="false" aria-label="Toggle Rush Super Driver Mode" title="Rush Super Driver Mode · R">${icon("zap")}<span id="rush-label">Rush Mode</span><kbd>R</kbd></button><button id="emergency-toggle" class="emergency-button" role="switch" aria-checked="false" aria-label="Toggle Emergency Ambulance Mode" title="Emergency Ambulance Mode · E"><span class="siren-emoji">🚨</span><span id="emergency-label">Ambulance</span><kbd>E</kbd></button><button id="candidates-toggle" class="candidate-button" aria-label="Show steering candidates" aria-pressed="false" title="Show steering candidates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V3m-3 3 3-3 3 3M12 20C12 14 7 12 3 8m0 3V8h3M12 20c0-6 5-8 9-12m-3 0h3v3"/><circle cx="12" cy="21" r="1" fill="currentColor" stroke="none"/></svg></button></div><div id="decision-status"><span id="pilot-state">Free play</span><span id="context-message">WASD to drive · Space to brake</span><span class="cost-total" title="Estimated cost from Jev-reported token usage and configured pricing."><span id="cost-label">Session</span> <strong id="cost">$0.000000</strong></span></div><span class="dock-divider"></span><div class="dock-tools" role="group" aria-label="View and driving controls"><button id="camera" title="Change camera · C" aria-label="Change camera">${icon("video")}<span id="camera-name">Chase</span></button><button id="scene-json" aria-label="Inspect live JSON" title="Inspect live JSON">${icon("braces")}</button><button id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icon("maximize")}</button><span class="divider"></span><button id="pause" aria-label="Pause simulation" title="Pause · P">${icon("pause")}</button><button id="sign-out" hidden aria-label="Sign out" title="Sign out">${icon("log-out")}</button></div></div></div>
+<div class="bottom-hud"><div class="driver-dock glass"><div class="speed-cluster"><div title="Current speed"><strong id="speed">0</strong><span>km/h</span></div><span class="speed-limit" title="Speed limit"><small>LIMIT</small><b id="speed-limit">50</b></span></div><span class="dock-divider"></span><div class="pilot-actions"><button id="autopilot" class="pilot-button" role="switch" aria-checked="false" aria-label="BRPilot autopilot" title="Engage BRPilot · J">${icon("sparkles")}<span id="pilot-label">Engage BRPilot</span><kbd>J</kbd></button><button id="rush-toggle" class="rush-button" role="switch" aria-checked="false" aria-label="Toggle Rush Super Driver Mode" title="Rush Super Driver Mode · R">${icon("zap")}<span id="rush-label">Rush Mode</span><kbd>R</kbd></button><button id="emergency-toggle" class="emergency-button" role="switch" aria-checked="false" aria-label="Toggle Emergency Ambulance Mode" title="Emergency Ambulance Mode · E"><span class="siren-emoji">🚨</span><span id="emergency-label">Ambulance</span><kbd>E</kbd></button><button id="candidates-toggle" class="candidate-button" aria-label="Show steering candidates" aria-pressed="false" title="Show steering candidates"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20V3m-3 3 3-3 3 3M12 20C12 14 7 12 3 8m0 3V8h3M12 20c0-6 5-8 9-12m-3 0h3v3"/><circle cx="12" cy="21" r="1" fill="currentColor" stroke="none"/></svg></button></div><div id="decision-status"><span id="pilot-state">Free play</span><span id="context-message">WASD to drive · Space to brake</span><span class="cost-total" title="Estimated cost from BRPilot token usage and configured pricing."><span id="cost-label">Session</span> <strong id="cost">$0.000000</strong></span></div><span class="dock-divider"></span><div class="dock-tools" role="group" aria-label="View and driving controls"><button id="camera" title="Change camera · C" aria-label="Change camera">${icon("video")}<span id="camera-name">Chase</span></button><button id="scene-json" aria-label="Inspect live JSON" title="Inspect live JSON">${icon("braces")}</button><button id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen">${icon("maximize")}</button><span class="divider"></span><button id="pause" aria-label="Pause simulation" title="Pause · P">${icon("pause")}</button><button id="sign-out" hidden aria-label="Sign out" title="Sign out">${icon("log-out")}</button></div></div></div>
 <dialog id="crash-dialog" aria-labelledby="crash-title" aria-describedby="crash-description"><span class="crash-symbol">${icon("x")}</span><span class="eyebrow">DRIVE ENDED</span><h1 id="crash-title">Game over.</h1><p id="crash-description"></p><div class="crash-stats"><div><strong id="crash-speed"></strong><span>km/h at impact</span></div><div><strong id="crash-distance"></strong><span>meters driven</span></div></div><button id="retry-drive" class="primary">${icon("rotate-ccw")} Restart drive</button><button id="crash-new-world" class="secondary">Try a new world ${icon("arrow-up-right")}</button></dialog>
-<dialog id="credit-dialog" aria-labelledby="credit-title"><span class="eyebrow">THANKS FOR TAKING A DRIVE</span><h2 id="credit-title">That's your free lap.</h2><p>Your $0.25 of Jev play credit has been used. You can keep exploring with manual controls.</p><button id="credit-close" class="primary">Keep driving manually</button><a href="https://standardagents.ai/" target="_blank" rel="noopener noreferrer">Explore Standard Agents ↗</a></dialog>
+<dialog id="credit-dialog" aria-labelledby="credit-title"><span class="eyebrow">THANKS FOR TAKING A DRIVE</span><h2 id="credit-title">That's your free lap.</h2><p>Your $0.25 of BRPilot play credit has been used. You can keep exploring with manual controls.</p><button id="credit-close" class="primary">Keep driving manually</button><a href="https://durbhasigurukulam.com/" target="_blank" rel="noopener noreferrer">Explore DGPL ↗</a></dialog>
 <div id="toast" role="status" hidden></div>
-<dialog id="json-dialog"><div class="json-header"><div>${icon("braces")}<strong>Under the hood</strong><span id="json-live">LIVE · 4 Hz</span></div><button id="close-json" aria-label="Close JSON inspector">${icon("x")}</button></div><div class="json-toolbar"><div class="json-tabs"><button data-tab="request" class="active">Jev input</button><button data-tab="sensor">Perception</button><button data-tab="world">Full world</button><button data-tab="decision">Response</button></div><div class="json-actions"><button id="freeze-json">Freeze</button><button id="copy-json" aria-label="Copy displayed JSON">${icon("copy")} <span id="copy-json-label" aria-live="polite">Copy</span></button><button id="download-json">${icon("download")} Download</button></div></div><p id="json-description">Exact Jev API payload, including instructions and offered choices. Full geometry and control details stay local.</p><pre id="json-content"></pre></dialog>
-<dialog id="help-dialog"><button id="close-help" class="dialog-close" aria-label="Close help">${icon("x")}</button><span class="eyebrow">YOUR NEXT DRIVE</span><h2>Take the wheel.</h2><p class="touch-help">Use the thumbstick to steer. Push up to accelerate, pull down to brake and reverse. Release to coast; hold Brake to stop.</p><div class="help-keys"><span><kbd>W / ↑</kbd> Hold accelerator</span><span><kbd>S / ↓</kbd> Brake / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>J</kbd> Jev autopilot</span><span><kbd>C</kbd> Camera</span><span><kbd>P</kbd> Pause</span><span><kbd>?</kbd> Keyboard help</span></div><p>Drag the scene to orbit in Chase or Bird’s eye; drag to look around in Driver view. Scroll to zoom outside; double-click to recenter. Tap A/D for small corrections; hold for a sharper turn and release to recenter. Hold W to accelerate; release to coast with drag. S brakes, then reverses once stopped. Space applies the brake. Autopilot sets target speed directly.</p><p>The bright blue line is Jev's selected three-second plan. Use Candidates to see the sampled paths: forward in blue/cyan, reverse in purple, lane departures in amber, and predicted collisions in orange. Choice probabilities are available in the JSON inspector. The safety brake can reduce speed for a missed hazard; interventions are shown beside the autopilot button.</p><p class="asset-credits">Vehicle: <a href="https://sketchfab.com/3d-models/tesla-model-y-2021-c0a86cac582d4b33aba0fb1b1912d970" target="_blank" rel="noreferrer">Tesla Model Y 2021</a> by 763468712, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Geometry adapted by Tina 3D Tesla; optimized, re-materialed, and wheel-rigged for JevPilot. Tree, shrub, streetlight, surface textures and sky: <a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven</a>, CC0.</p><p>Driving keys take back control. Use the JSON button for live inputs, full world state, probabilities, and session telemetry.</p></dialog>`;
+<dialog id="json-dialog"><div class="json-header"><div>${icon("braces")}<strong>Under the hood</strong><span id="json-live">LIVE · 4 Hz</span></div><button id="close-json" aria-label="Close JSON inspector">${icon("x")}</button></div><div class="json-toolbar"><div class="json-tabs"><button data-tab="request" class="active">BRPilot input</button><button data-tab="sensor">Perception</button><button data-tab="world">Full world</button><button data-tab="decision">Response</button></div><div class="json-actions"><button id="freeze-json">Freeze</button><button id="copy-json" aria-label="Copy displayed JSON">${icon("copy")} <span id="copy-json-label" aria-live="polite">Copy</span></button><button id="download-json">${icon("download")} Download</button></div></div><p id="json-description">Exact BRPilot API payload, including instructions and offered choices. Full geometry and control details stay local.</p><pre id="json-content"></pre></dialog>
+<dialog id="help-dialog"><button id="close-help" class="dialog-close" aria-label="Close help">${icon("x")}</button><span class="eyebrow">YOUR NEXT DRIVE</span><h2>Take the wheel.</h2><p class="touch-help">Use the thumbstick to steer. Push up to accelerate, pull down to brake and reverse. Release to coast; hold Brake to stop.</p><div class="help-keys"><span><kbd>W / ↑</kbd> Hold accelerator</span><span><kbd>S / ↓</kbd> Brake / reverse</span><span><kbd>A / D</kbd> Steer</span><span><kbd>SPACE</kbd> Brake</span><span><kbd>J</kbd> BRPilot autopilot</span><span><kbd>C</kbd> Camera</span><span><kbd>P</kbd> Pause</span><span><kbd>?</kbd> Keyboard help</span></div><p>Drag the scene to orbit in Chase or Bird’s eye; drag to look around in Driver view. Scroll to zoom outside; double-click to recenter. Tap A/D for small corrections; hold for a sharper turn and release to recenter. Hold W to accelerate; release to coast with drag. S brakes, then reverses once stopped. Space applies the brake. Autopilot sets target speed directly.</p><p>The bright blue line is BRPilot's selected three-second plan. Use Candidates to see the sampled paths: forward in blue/cyan, reverse in purple, lane departures in amber, and predicted collisions in orange. Choice probabilities are available in the JSON inspector. The safety brake can reduce speed for a missed hazard; interventions are shown beside the autopilot button.</p><p class="asset-credits">Vehicle: <a href="https://sketchfab.com/3d-models/tesla-model-y-2021-c0a86cac582d4b33aba0fb1b1912d970" target="_blank" rel="noreferrer">Tesla Model Y 2021</a> by 763468712, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>. Geometry adapted by Tina 3D Tesla; optimized, re-materialed, and wheel-rigged for BRPilot. Tree, shrub, streetlight, surface textures and sky: <a href="https://polyhaven.com" target="_blank" rel="noreferrer">Poly Haven</a>, CC0.</p><p>Driving keys take back control. Use the JSON button for live inputs, full world state, probabilities, and session telemetry.</p></dialog>`;
 $("app").insertAdjacentHTML(
   "beforeend",
   `
@@ -262,8 +262,8 @@ function refreshWorld() {
 function syncPilot() {
   const on = sim.autopilot;
   $("autopilot").setAttribute("aria-checked", String(on));
-  $("pilot-label").textContent = on ? "Jev engaged" : "Engage Jev";
-  tooltips.set($("autopilot"), `${on ? "Disengage" : "Engage"} Jev · J`);
+  $("pilot-label").textContent = on ? "BRPilot engaged" : "Engage BRPilot";
+  tooltips.set($("autopilot"), `${on ? "Disengage" : "Engage"} BRPilot · J`);
   $("autopilot").disabled = !!sim.crash;
   document.body.classList.toggle("piloting", on);
   touch.sync();
@@ -277,7 +277,7 @@ function setPilot(on) {
     return;
   }
   if (on && !configured) {
-    toast("Jev is not connected. Check the API key on the server.", "error");
+    toast("BRPilot is not connected. Check the API key on the server.", "error");
     return;
   }
   if (sim.crash || (on && sim.complete)) return;
@@ -564,13 +564,13 @@ document.querySelectorAll("[data-tab]").forEach(
         .forEach((b) => b.classList.toggle("active", b === button));
       $("json-description").textContent = {
         request:
-          "Exact Jev API payload, including instructions and offered choices. Full geometry and control details stay local.",
+          "Exact BRPilot API payload, including instructions and offered choices. Full geometry and control details stay local.",
         sensor:
           "Complete forward perception, route guidance, geometry predictions and vehicle telemetry.",
         world:
           "All roads, buildings, vehicles, pedestrians, controls, and the current route.",
         decision:
-          "Actual Jev probabilities and token usage. Costs accumulate across every completed call.",
+          "Actual BRPilot probabilities and token usage. Costs accumulate across every completed call.",
       }[inspectorTab];
       renderJSON();
     }),
@@ -588,7 +588,7 @@ function inspectRequest(state) {
   return Object.keys(request.questions).length
     ? request
     : {
-        status: "No Jev call needed: only one eligible action.",
+        status: "No BRPilot call needed: only one eligible action.",
         resolved_locally: fixed,
       };
 }
@@ -619,7 +619,7 @@ function updateCostTooltip(pricing) {
     : "";
   tooltips.set(
     document.querySelector(".cost-total"),
-    `${playCredits ? "Remaining from your one-time $0.25 allowance. " : ""}${averages}Estimated from Jev-reported tokens at $${pricing.input_per_million}/M input and $${pricing.output_per_million}/M output.`,
+    `${playCredits ? "Remaining from your one-time $0.25 allowance. " : ""}${averages}Estimated from BRPilot tokens at $${pricing.input_per_million}/M input and $${pricing.output_per_million}/M output.`,
   );
 }
 function inspectData() {
@@ -724,7 +724,7 @@ let wsConnecting = false;
 
 function getDGPLWebSocket() {
   const apiKey = localStorage.getItem("dgpl_api_key") || "dgpl_live_master_admin_secret_key_2026";
-  const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://system1.durbhasigurukulam.com/ws/v1/stream";
+  const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://br.durbhasigurukulam.com/ws/v1/stream";
   
   if (dgplWs && (dgplWs.readyState === WebSocket.OPEN || dgplWs.readyState === WebSocket.CONNECTING)) {
     return dgplWs;
@@ -838,7 +838,7 @@ async function decide() {
     const routeAliases = Object.keys(requestQuestions.route?.criteria || {});
 
     const candidateIds = vectorAliases.length > 0 ? vectorAliases : Object.keys(plan || {});
-    const prodEndpoint = localStorage.getItem("dgpl_api_url") || "https://system1.durbhasigurukulam.com/api/v1/systemone";
+    const prodEndpoint = localStorage.getItem("dgpl_api_url") || "https://br.durbhasigurukulam.com/api/v1/systemone";
     const apiKey = localStorage.getItem("dgpl_api_key") || "dgpl_live_master_admin_secret_key_2026";
 
     const tStart = performance.now();
@@ -929,8 +929,8 @@ async function decide() {
     const selectedCandidate = state.vectors[selection.choice] || Object.values(state.vectors)[0];
 
     const data = {
-      model: "DGPL-System1-v2.0 (Live Production API)",
-      decision_source: "dgpl_system1_cloud_api",
+      model: "DGPL-BRPilot-v2.0 (Live Production API)",
+      decision_source: "dgpl_brpilot_cloud_api",
       answers: expandedAnswers,
       selection: selection,
       batch_id: state.batch_id,
@@ -957,10 +957,10 @@ async function decide() {
     )
       return;
     const controls = decisionControls(state, data);
-    if (!controls) throw Error("Jev returned a mismatched candidate batch.");
+    if (!controls) throw Error("BRPilot returned a mismatched candidate batch.");
     const now = performance.now();
     if (now - started > 1800)
-      throw Error("Jev decision expired before it arrived. Replanning.");
+      throw Error("BRPilot decision expired before it arrived. Replanning.");
     if (sim.decisionContextChanged(state)) {
       // Apply controls immediately so the vehicle doesn't stall or freeze steering across the line
       sim.player.maneuver = state.vectors[data.selection.choice];
@@ -1000,7 +1000,7 @@ async function decide() {
       if (errors >= 3) {
         setPilot(false);
         toast(
-          "Jev paused after three failed requests. Toggle autopilot to reconnect.",
+          "BRPilot paused after three failed requests. Toggle autopilot to reconnect.",
           "error",
         );
       }
@@ -1158,7 +1158,7 @@ function updateUI() {
     $("context-message").textContent =
       lastDecision.decision_source === "only_eligible_action"
         ? "Only stop is available · rechecking scene"
-        : "Jev chose to wait · evaluating traffic";
+        : "BRPilot chose to wait · evaluating traffic";
   }
   if (nav.rerouted)
     $("context-message").textContent =
@@ -1267,8 +1267,8 @@ updateUI();
 requestAnimationFrame(animate);
 finishLoading().catch(loadingFailed);
 setInterval(decide, 25);
-// Connect to DGPL System-1 Production Decision Engine
-const prodHealthUrl = localStorage.getItem("dgpl_health_url") || "https://system1.durbhasigurukulam.com/api/v1/health";
+// Connect to DGPL BRPilot Production Decision Engine
+const prodHealthUrl = localStorage.getItem("dgpl_health_url") || "https://br.durbhasigurukulam.com/api/v1/health";
 fetch(prodHealthUrl)
   .then((r) => r.json())
   .then((data) => {
@@ -1278,7 +1278,7 @@ fetch(prodHealthUrl)
     updateCredits(100.0);
     $("sign-out").hidden = true;
     updateCostTooltip({ input_per_million: 0.10, output_per_million: 0.10 });
-    console.log("[DGPL System-1] Engine Online:", data);
+    console.log("[DGPL BRPilot] Engine Online:", data);
   })
   .catch(() => {
     configured = true;

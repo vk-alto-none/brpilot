@@ -1,6 +1,6 @@
 """
-DGPL System-1 Local Microservice for JevPilot 3D Simulator
-Provides /v1/systemone API compatible with TypeSafe Jev schemas.
+DGPL System-1 Local Microservice for BRPilot 3D Simulator
+Provides /v1/systemone API compatible with TypeSafe schemas.
 Runs 100% locally with 0ms cloud roundtrip and zero token cost.
 Classification: PROPRIETARY & CONFIDENTIAL — COMMERCIAL ENTERPRISE (DGPL)
 """
