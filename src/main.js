@@ -817,9 +817,12 @@ function renderJSON() {
 let dgplWs = null;
 let wsPendingCallbacks = {};
 let wsReqCounter = 0;
-let wsConnecting = false;
+let wsReconnectTimer = null;
+let wsReconnectAttempts = 0;
+let wsHeartbeatInterval = null;
+let isDecidingInFlight = false;
 
-function getDGPLWebSocket() {
+function connectDGPLWebSocket() {
   const apiKey = localStorage.getItem("dgpl_api_key") || "";
   if (!apiKey) {
     if (dgplWs) {
@@ -828,24 +831,40 @@ function getDGPLWebSocket() {
     }
     return null;
   }
+  
   const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://br.durbhasigurukulam.com/ws/v1/stream";
   
   if (dgplWs && (dgplWs.readyState === WebSocket.OPEN || dgplWs.readyState === WebSocket.CONNECTING)) {
     return dgplWs;
   }
-  
+
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+
   try {
     const fullWsUrl = `${wsEndpoint}?api_key=${encodeURIComponent(apiKey)}`;
     dgplWs = new WebSocket(fullWsUrl);
-    
+
     dgplWs.onopen = () => {
-      console.log("[DGPL WebSocket] Persistent live stream connected.");
+      wsReconnectAttempts = 0;
       updateKeyStatusUI();
+
+      if (wsHeartbeatInterval) clearInterval(wsHeartbeatInterval);
+      wsHeartbeatInterval = setInterval(() => {
+        if (dgplWs && dgplWs.readyState === WebSocket.OPEN) {
+          try {
+            dgplWs.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
+          } catch (e) {}
+        }
+      }, 8000);
     };
-    
+
     dgplWs.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === "pong") return;
         if (msg.req_id && wsPendingCallbacks[msg.req_id]) {
           const resolve = wsPendingCallbacks[msg.req_id];
           delete wsPendingCallbacks[msg.req_id];
@@ -855,15 +874,29 @@ function getDGPLWebSocket() {
         console.error("[DGPL WebSocket] Message parsing error:", err);
       }
     };
-    
-    dgplWs.onerror = (err) => {
-      console.warn("[DGPL WebSocket] Stream error:", err);
+
+    dgplWs.onerror = () => {
       updateKeyStatusUI();
     };
-    
+
     dgplWs.onclose = () => {
+      if (wsHeartbeatInterval) {
+        clearInterval(wsHeartbeatInterval);
+        wsHeartbeatInterval = null;
+      }
       dgplWs = null;
       updateKeyStatusUI();
+
+      // Reject all pending callbacks gracefully
+      Object.keys(wsPendingCallbacks).forEach(id => {
+        try { wsPendingCallbacks[id](null); } catch (e) {}
+      });
+      wsPendingCallbacks = {};
+
+      // Exponential backoff reconnect with jitter (max 5s)
+      const delay = Math.min(5000, 1000 * Math.pow(1.3, wsReconnectAttempts) + Math.random() * 400);
+      wsReconnectAttempts++;
+      wsReconnectTimer = setTimeout(connectDGPLWebSocket, delay);
     };
   } catch (e) {
     dgplWs = null;
@@ -872,8 +905,16 @@ function getDGPLWebSocket() {
   return dgplWs;
 }
 
-function sendDGPLDecisionWS(payload, timeoutMs = 1200) {
-  const ws = getDGPLWebSocket();
+// Auto-reconnect listeners on tab focus and network online events
+window.addEventListener("online", () => connectDGPLWebSocket());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && (!dgplWs || dgplWs.readyState !== WebSocket.OPEN)) {
+    connectDGPLWebSocket();
+  }
+});
+
+function sendDGPLDecisionWS(payload, timeoutMs = 2500) {
+  const ws = connectDGPLWebSocket();
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     return Promise.reject(new Error("WebSocket not connected"));
   }
@@ -886,12 +927,16 @@ function sendDGPLDecisionWS(payload, timeoutMs = 1200) {
         reject(new Error("WebSocket timeout"));
       }
     }, timeoutMs);
-    
+
     wsPendingCallbacks[reqId] = (response) => {
       clearTimeout(timer);
-      resolve(response);
+      if (!response) {
+        reject(new Error("WebSocket closed"));
+      } else {
+        resolve(response);
+      }
     };
-    
+
     try {
       ws.send(JSON.stringify(payload));
     } catch (e) {
@@ -903,12 +948,13 @@ function sendDGPLDecisionWS(payload, timeoutMs = 1200) {
 }
 
 // Pre-initialize WebSocket immediately on module load
-getDGPLWebSocket();
+connectDGPLWebSocket();
 
 async function decide() {
   if (
     loading ||
     busy ||
+    isDecidingInFlight ||
     !sim.autopilot ||
     sim.paused ||
     document.hidden ||
@@ -924,6 +970,7 @@ async function decide() {
     if (!lastContext || !sim.decisionContextChanged(lastContext)) return;
   }
   busy = true;
+  isDecidingInFlight = true;
   const token = generation,
     started = performance.now();
   try {
@@ -953,6 +1000,7 @@ async function decide() {
     let selectedChoice = null;
     let dist = {};
     let cloudSuccess = false;
+    let transportType = "ws";
 
     if (!apiKey) {
       setPilot(false);
@@ -966,14 +1014,14 @@ async function decide() {
     const turnDist = typeof state.turn === "object" ? (state.turn?.in_m ?? 0) : 0;
     const stateDesc = `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${turnDir}_dist_${turnDist}m`;
 
-    // 1. Primary Ultra-fast WebSocket Stream (Sub-5ms)
+    // 1. Primary Ultra-fast WebSocket Stream (Sub-5ms overhead)
     try {
       const wsResp = await sendDGPLDecisionWS({
         type: "decision",
         task: "choice",
         state: stateDesc,
         candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
-      }, 1500);
+      }, 2500);
 
       if (wsResp && wsResp.status === "success") {
         const sel = wsResp.decision?.selected;
@@ -982,10 +1030,11 @@ async function decide() {
         }
         dist = wsResp.decision?.distribution || {};
         cloudSuccess = true;
+        transportType = "ws";
       }
     } catch (wsErr) {}
 
-    // 2. High-reliability REST Direct Endpoint (/api/v1/systemone)
+    // 2. High-reliability REST Direct Fallback (/api/v1/systemone)
     if (!cloudSuccess) {
       try {
         const res = await fetch(prodEndpoint, {
@@ -1011,6 +1060,7 @@ async function decide() {
           }
           dist = prodData.decision?.distribution || {};
           cloudSuccess = true;
+          transportType = "rest";
         } else if (res.status === 401 || res.status === 403) {
           errors++;
           setPilot(false);
@@ -1028,7 +1078,7 @@ async function decide() {
 
     if (!cloudSuccess || !selectedChoice) {
       errors++;
-      if (errors >= 3) {
+      if (errors >= 4) {
         setPilot(false);
         toast("⚠️ DGPL System-1 Cloud Connection Lost. Autopilot disengaged.", "error");
       }
@@ -1154,6 +1204,7 @@ async function decide() {
     }
   } finally {
     busy = false;
+    isDecidingInFlight = false;
   }
 }
 function drawMap() {
@@ -1509,7 +1560,7 @@ async function validateAndConnectKey(rawKey, notify = false) {
       );
       
       if (notify) toast(`⚡ DGPL Cloud Connected! Verified in ${elapsed}ms. Autopilot Ready.`, "info");
-      getDGPLWebSocket();
+      connectDGPLWebSocket();
       return { valid: true, latency: elapsed, tier: data.key_tier };
     } else {
       isKeyValid = false;
