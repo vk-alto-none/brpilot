@@ -80,8 +80,8 @@ export async function evaluate(state, env, signal, onUsage, clientApiKey = "") {
   let data = { answers: {}, usage: { input_tokens: 0, output_tokens: 0 } };
 
   if (apiCall) {
-    const productionEndpoint = env.DGPL_ENDPOINT || "https://system1.durbhasigurukulam.com/api/v1/systemone";
-    const apiKey = clientApiKey || env.DGPL_API_KEY || "dgpl_live_master_admin_secret_key_2026";
+    const productionEndpoint = env.DGPL_ENDPOINT || "https://br.durbhasigurukulam.com/api/v1/systemone";
+    const apiKey = clientApiKey || env.DGPL_API_KEY || "";
     
     // Convert to DGPL System-1 REST API schema
     const dgplPayload = {

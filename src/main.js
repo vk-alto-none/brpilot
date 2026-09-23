@@ -723,7 +723,7 @@ let wsReqCounter = 0;
 let wsConnecting = false;
 
 function getDGPLWebSocket() {
-  const apiKey = localStorage.getItem("dgpl_api_key") || "dgpl_live_master_admin_secret_key_2026";
+  const apiKey = localStorage.getItem("dgpl_api_key") || "";
   const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://br.durbhasigurukulam.com/ws/v1/stream";
   
   if (dgplWs && (dgplWs.readyState === WebSocket.OPEN || dgplWs.readyState === WebSocket.CONNECTING)) {
@@ -839,7 +839,7 @@ async function decide() {
 
     const candidateIds = vectorAliases.length > 0 ? vectorAliases : Object.keys(plan || {});
     const prodEndpoint = localStorage.getItem("dgpl_api_url") || "https://br.durbhasigurukulam.com/api/v1/systemone";
-    const apiKey = localStorage.getItem("dgpl_api_key") || "dgpl_live_master_admin_secret_key_2026";
+    const apiKey = localStorage.getItem("dgpl_api_key") || "";
 
     const tStart = performance.now();
     let selectedChoice = candidateIds[0] || "v0";
