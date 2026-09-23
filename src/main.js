@@ -1101,6 +1101,12 @@ async function decide() {
     const now = performance.now();
     if (now - started > 1800)
       throw Error("BRPilot decision expired before it arrived. Replanning.");
+
+    lastApplied = now;
+    lastDecision = { ...data, received_at_simulation_s: sim.time };
+    lastContext = state;
+    errors = 0;
+
     if (sim.decisionContextChanged(state)) {
       // Apply controls immediately so the vehicle doesn't stall or freeze steering across the line
       sim.player.maneuver = state.vectors[data.selection.choice];
@@ -1120,10 +1126,6 @@ async function decide() {
     }
     if (lastApplied) tally.intervals.push(now - lastApplied);
     if (tally.intervals.length > 20) tally.intervals.shift();
-    lastDecision = { ...data, received_at_simulation_s: sim.time };
-    lastContext = state;
-    lastApplied = now;
-    errors = 0;
     sim.player.maneuver = state.vectors[data.selection.choice];
     sim.player.steering = controls.steering;
     sim.player.target = controls.velocity;
