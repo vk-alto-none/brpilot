@@ -83,10 +83,14 @@ export async function evaluate(state, env, signal, onUsage, clientApiKey = "") {
     const productionEndpoint = env.DGPL_ENDPOINT || "https://br.durbhasigurukulam.com/api/v1/systemone";
     const apiKey = clientApiKey || env.DGPL_API_KEY || "";
     
+    const turnDir = typeof state.turn === "object" ? (state.turn?.direction || "straight") : (state.turn || "straight");
+    const turnDist = typeof state.turn === "object" ? (state.turn?.in_m ?? 0) : 0;
+    const stateDesc = `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${turnDir}_dist_${turnDist}m`;
+
     // Convert to DGPL System-1 REST API schema
     const dgplPayload = {
       task: "choice",
-      state: `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${state.turn}`,
+      state: stateDesc,
       candidates: vectorAliases.length > 0 ? vectorAliases : ["v0", "v1", "v2", "v3"]
     };
 

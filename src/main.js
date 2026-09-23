@@ -961,14 +961,19 @@ async function decide() {
       return;
     }
 
+    // Cleanly serialize navigation and road state for DGPL System-1 Text SAN Backbone
+    const turnDir = typeof state.turn === "object" ? (state.turn?.direction || "straight") : (state.turn || "straight");
+    const turnDist = typeof state.turn === "object" ? (state.turn?.in_m ?? 0) : 0;
+    const stateDesc = `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${turnDir}_dist_${turnDist}m`;
+
     // 1. Primary Ultra-fast WebSocket Stream (Sub-5ms)
     try {
       const wsResp = await sendDGPLDecisionWS({
         type: "decision",
         task: "choice",
-        state: `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${state.turn}`,
+        state: stateDesc,
         candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
-      }, 1200);
+      }, 1500);
 
       if (wsResp && wsResp.status === "success") {
         const sel = wsResp.decision?.selected;
@@ -980,7 +985,7 @@ async function decide() {
       }
     } catch (wsErr) {}
 
-    // 2. High-reliability REST Fallback
+    // 2. High-reliability REST Direct Endpoint (/api/v1/systemone)
     if (!cloudSuccess) {
       try {
         const res = await fetch(prodEndpoint, {
@@ -992,10 +997,10 @@ async function decide() {
           },
           body: JSON.stringify({
             task: "choice",
-            state: `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${state.turn}`,
+            state: stateDesc,
             candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
           }),
-          signal: AbortSignal.timeout(3000)
+          signal: AbortSignal.timeout(4000)
         });
 
         if (res.ok) {
