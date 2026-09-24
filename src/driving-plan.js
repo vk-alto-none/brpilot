@@ -253,6 +253,10 @@ export function createDrivingPlan(
 
       const leftClear = isPassingLaneClear(car, obstacles, -1);
       const rightClear = isPassingLaneClear(car, obstacles, 1);
+      const leftPose = move(car, car.heading - Math.PI / 2, 2.2);
+      const rightPose = move(car, car.heading + Math.PI / 2, 2.2);
+      const leftOccupancy = roadOccupancy({ ...car, x: leftPose.x, z: leftPose.z }, surfaces);
+      const rightOccupancy = roadOccupancy({ ...car, x: rightPose.x, z: rightPose.z }, surfaces);
 
       if (leftClear && leftOccupancy.on_road && (leftBlockCount <= rightBlockCount || !rightClear)) {
         car.activeOvertakeSide = -1; // Left passing lane is clear & safe
