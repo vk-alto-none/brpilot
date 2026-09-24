@@ -1029,12 +1029,14 @@ async function decide() {
         candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
       }, 2500);
 
-      if (wsResp && wsResp.status === "success") {
-        const sel = wsResp.decision?.selected;
-        if (sel && candidateIds.includes(sel)) {
+      if (wsResp && (wsResp.status === "success" || wsResp.selected || wsResp.decision)) {
+        const sel = wsResp.decision?.selected || wsResp.selected;
+        if (sel && (candidateIds.includes(sel) || !candidateIds.length)) {
           selectedChoice = sel;
+        } else if (candidateIds.length > 0) {
+          selectedChoice = candidateIds[0];
         }
-        dist = wsResp.decision?.distribution || {};
+        dist = wsResp.decision?.distribution || wsResp.distribution || {};
         cloudSuccess = true;
         transportType = "ws";
       }
@@ -1060,11 +1062,13 @@ async function decide() {
 
         if (res.ok) {
           const prodData = await res.json();
-          const sel = prodData.decision?.selected;
-          if (sel && candidateIds.includes(sel)) {
+          const sel = prodData.decision?.selected || prodData.selected;
+          if (sel && (candidateIds.includes(sel) || !candidateIds.length)) {
             selectedChoice = sel;
+          } else if (candidateIds.length > 0) {
+            selectedChoice = candidateIds[0];
           }
-          dist = prodData.decision?.distribution || {};
+          dist = prodData.decision?.distribution || prodData.distribution || {};
           cloudSuccess = true;
           transportType = "rest";
         } else if (res.status === 401 || res.status === 403) {
