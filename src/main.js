@@ -43,6 +43,7 @@ import {
 import { prepareJevRequest, expandJevAnswers, decisionInterval } from "./jev-request.js";
 import { THEMES } from "./world.js";
 import { candidateName, decisionControls, decisionSelection } from "./planning.js";
+import { DGPL_CONFIG } from "./config.js";
 import { clamp, nearestOnPath } from "./math.js";
 const icons = {
   Braces,
@@ -176,7 +177,7 @@ $("app").innerHTML = `
       <div class="key-modal-title">
         ${icon("key")}
         <div>
-          <h3>DGPL System-1 Cloud Engine</h3>
+          <h3>${DGPL_CONFIG.getEnvironmentLabel()}</h3>
           <span class="sub-label">Autonomous Neural Decision Stream</span>
         </div>
       </div>
@@ -185,7 +186,7 @@ $("app").innerHTML = `
     
     <div class="key-modal-body">
       <p class="key-modal-desc">
-        BRPilot is strictly powered by <strong>DGPL System-1 Online Cloud Inference</strong>. Real-time path trajectories, collision avoidance, and steering decisions are computed over our sub-5ms low-latency WebSocket stream.
+        BRPilot is powered by <strong>${DGPL_CONFIG.getEnvironmentLabel()} (${DGPL_CONFIG.getBaseUrl()})</strong>. Real-time path trajectories, collision avoidance, and steering decisions are computed over ultra-low-latency neural WebSocket streams.
       </p>
       
       <div class="key-input-container">
@@ -213,8 +214,8 @@ $("app").innerHTML = `
       </div>
       
       <div class="key-modal-footer">
-        <span>Need a free API key?</span>
-        <a href="https://br.durbhasigurukulam.com/#keys" target="_blank" rel="noopener noreferrer">Generate Auto-Approved Key on DGPL Platform ↗</a>
+        <span>Need an API key?</span>
+        <a href="${DGPL_CONFIG.getKeysPageUrl()}" target="_blank" rel="noopener noreferrer">DGPL Platform & Key Manager ↗</a>
       </div>
     </div>
   </div>
@@ -837,8 +838,7 @@ function connectDGPLWebSocket() {
     }
     return null;
   }
-  
-  const wsEndpoint = localStorage.getItem("dgpl_ws_url") || "wss://br.durbhasigurukulam.com/ws/v1/stream";
+  const wsEndpoint = DGPL_CONFIG.getWsUrl();
   
   if (dgplWs && (dgplWs.readyState === WebSocket.OPEN || dgplWs.readyState === WebSocket.CONNECTING)) {
     return dgplWs;
@@ -999,7 +999,7 @@ async function decide() {
     const routeAliases = Object.keys(requestQuestions.route?.criteria || {});
 
     const candidateIds = vectorAliases.length > 0 ? vectorAliases : Object.keys(plan || {});
-    const prodEndpoint = localStorage.getItem("dgpl_api_url") || "https://br.durbhasigurukulam.com/api/v1/systemone";
+    const prodEndpoint = DGPL_CONFIG.getApiUrl();
     const apiKey = localStorage.getItem("dgpl_api_key") || "";
 
     const tStart = performance.now();
@@ -1526,14 +1526,14 @@ async function validateAndConnectKey(rawKey, notify = false) {
   updateModalBanner(
     "idle",
     "Verifying Key...",
-    "Connecting to DGPL System-1 Cloud inference endpoint...",
+    `Connecting to ${DGPL_CONFIG.getEnvironmentLabel()} (${DGPL_CONFIG.getBaseUrl()})...`,
     "Verifying...",
     "badge-neutral"
   );
 
   try {
     const t0 = performance.now();
-    const res = await fetch("https://br.durbhasigurukulam.com/api/v1/systemone", {
+    const res = await fetch(DGPL_CONFIG.getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1556,16 +1556,17 @@ async function validateAndConnectKey(rawKey, notify = false) {
       configured = true;
       
       const tierName = (data.key_tier || "Enterprise").toUpperCase();
-      updateTopbarPill(`⚡ DGPL Cloud (${elapsed}ms)`, "pill-dot-live");
+      const envTag = DGPL_CONFIG.isLocal() ? "DGPL Local" : "DGPL Cloud";
+      updateTopbarPill(`⚡ ${envTag} (${elapsed}ms)`, "pill-dot-live");
       updateModalBanner(
         "live",
-        "⚡ DGPL Cloud Connected",
-        `Active & Ready · Latency: ${elapsed}ms · Tier: ${tierName}`,
+        `⚡ ${DGPL_CONFIG.getEnvironmentLabel()} Connected`,
+        `Active & Ready · Latency: ${elapsed}ms · Tier: ${tierName} · Endpoint: ${DGPL_CONFIG.getBaseUrl()}`,
         `Valid (${tierName})`,
         "badge-valid"
       );
       
-      if (notify) toast(`⚡ DGPL Cloud Connected! Verified in ${elapsed}ms. Autopilot Ready.`, "info");
+      if (notify) toast(`⚡ ${DGPL_CONFIG.getEnvironmentLabel()} Connected! Verified in ${elapsed}ms. Autopilot Ready.`, "info");
       connectDGPLWebSocket();
       return { valid: true, latency: elapsed, tier: data.key_tier };
     } else {
@@ -1595,15 +1596,15 @@ async function validateAndConnectKey(rawKey, notify = false) {
     }
   } catch (err) {
     isKeyValid = false;
-    updateTopbarPill("⚠️ Cloud Offline", "pill-dot-offline");
+    updateTopbarPill("⚠️ Engine Offline", "pill-dot-offline");
     updateModalBanner(
       "error",
-      "⚠️ Cloud Unreachable",
-      `Network error: ${err.message}`,
+      `⚠️ ${DGPL_CONFIG.getEnvironmentLabel()} Unreachable`,
+      `Network error connecting to ${DGPL_CONFIG.getBaseUrl()}: ${err.message}`,
       "Unreachable",
       "badge-invalid"
     );
-    if (notify) toast(`⚠️ DGPL Cloud is unreachable (${err.message})`, "error");
+    if (notify) toast(`⚠️ ${DGPL_CONFIG.getEnvironmentLabel()} is unreachable (${err.message})`, "error");
     return { valid: false, reason: err.message };
   }
 }
