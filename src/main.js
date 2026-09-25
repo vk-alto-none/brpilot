@@ -392,14 +392,19 @@ function syncPilot() {
 function setPilot(on) {
   if (loading) return;
   touch.reset();
-  const apiKey = localStorage.getItem("dgpl_api_key") || "";
+  let apiKey = (localStorage.getItem("dgpl_api_key") || "").trim();
+  if (!apiKey && DGPL_CONFIG.isLocal()) {
+    apiKey = "dgpl_adm_master_sovereign_2026";
+    localStorage.setItem("dgpl_api_key", apiKey);
+  }
   if (on && !apiKey) {
-    toast("🔒 DGPL System-1 API Key Required. Autopilot is powered exclusively by DGPL Cloud.", "error");
+    toast(`🔒 API Key Required. Connect your key to engage ${DGPL_CONFIG.getEnvironmentLabel()}.`, "error");
     $("key-dialog").showModal();
     return;
   }
   if (on && !configured) {
-    toast("⚠️ DGPL System-1 Cloud is unreachable. Autopilot requires live cloud connectivity.", "error");
+    toast(`⚠️ ${DGPL_CONFIG.getEnvironmentLabel()} is unreachable (${DGPL_CONFIG.getBaseUrl()}). Please verify engine status.`, "error");
+    $("key-dialog").showModal();
     return;
   }
   if (sim.crash || (on && sim.complete)) return;
@@ -1777,7 +1782,11 @@ if ($("test-key-btn")) {
 }
 
 // Auto-check URL parameters or local storage on boot
-const initialKey = (urlApiKey || localStorage.getItem("dgpl_api_key") || "").trim();
+let initialKey = (urlApiKey || localStorage.getItem("dgpl_api_key") || "").trim();
+if (!initialKey && DGPL_CONFIG.isLocal()) {
+  initialKey = "dgpl_adm_master_sovereign_2026";
+  localStorage.setItem("dgpl_api_key", initialKey);
+}
 
 if (initialKey) {
   validateAndConnectKey(initialKey, false);
