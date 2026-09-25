@@ -129,7 +129,7 @@ $("app").innerHTML = `
     <a href="/" class="brand" aria-label="BRPilot by DGPL">
       <img class="brand-mark" src="/brand/standard-agents-mark.svg" alt=""/>
       <b>BRPilot</b>
-      <span class="brand-badge">DGPL Cloud</span>
+      <span id="brand-badge-text" class="brand-badge ${DGPL_CONFIG.isLocal() ? '' : 'cloud'}">${DGPL_CONFIG.isLocal() ? 'DGPL Local' : 'DGPL Cloud'}</span>
     </a>
   </div>
   <div class="topbar-center">
@@ -157,6 +157,12 @@ $("app").innerHTML = `
     </div>
   </div>
   <div class="topbar-right">
+    <div class="engine-switch-container">
+      <select id="engine-target-select" class="engine-target-select" aria-label="Engine Target" title="Switch between Local and Cloud Engine">
+        <option value="local" ${DGPL_CONFIG.isLocal() ? 'selected' : ''}>💻 DGPL Local (127.0.0.1:8000)</option>
+        <option value="cloud" ${!DGPL_CONFIG.isLocal() ? 'selected' : ''}>☁️ DGPL Cloud (br.durbhasigurukulam.com)</option>
+      </select>
+    </div>
     <button id="key-modal-btn" class="key-pill-btn" title="DGPL System-1 API Connection">
       <span id="key-status-dot-pill" class="pill-dot pill-dot-offline"></span>
       <span id="key-badge-text">🔒 Connect API Key</span>
@@ -185,17 +191,33 @@ $("app").innerHTML = `
     </div>
     
     <div class="key-modal-body">
-      <p class="key-modal-desc">
-        BRPilot is powered by <strong>${DGPL_CONFIG.getEnvironmentLabel()} (${DGPL_CONFIG.getBaseUrl()})</strong>. Real-time path trajectories, collision avoidance, and steering decisions are computed over ultra-low-latency neural WebSocket streams.
-      </p>
+      <div class="engine-selector-box">
+        <label class="section-subhead">Inference Engine Target</label>
+        <div class="target-toggle-group">
+          <button type="button" id="target-local-btn" class="target-btn ${DGPL_CONFIG.isLocal() ? 'active' : ''}" data-target="local">
+            <span class="target-icon">💻</span>
+            <div>
+              <strong>DGPL Local Engine</strong>
+              <small>http://127.0.0.1:8000</small>
+            </div>
+          </button>
+          <button type="button" id="target-cloud-btn" class="target-btn ${!DGPL_CONFIG.isLocal() ? 'active' : ''}" data-target="cloud">
+            <span class="target-icon">☁️</span>
+            <div>
+              <strong>DGPL Cloud Engine</strong>
+              <small>https://br.durbhasigurukulam.com</small>
+            </div>
+          </button>
+        </div>
+      </div>
       
       <div class="key-input-container">
         <div class="input-label-row">
-          <label for="dgpl-key-input">Your DGPL Live API Key</label>
+          <label for="dgpl-key-input">Your DGPL API Key</label>
           <span id="key-validation-badge" class="badge-neutral">Awaiting Input</span>
         </div>
         <div class="input-wrapper">
-          <input type="text" id="dgpl-key-input" placeholder="dgpl_live_..." autocomplete="off" spellcheck="false" />
+          <input type="text" id="dgpl-key-input" placeholder="dgpl_adm_... or dgpl_live_..." autocomplete="off" spellcheck="false" />
         </div>
       </div>
       
@@ -1609,10 +1631,68 @@ async function validateAndConnectKey(rawKey, notify = false) {
   }
 }
 
+// Engine Target Switching Logic
+function setEngineTarget(target, autoValidate = true) {
+  if (target === "local") {
+    DGPL_CONFIG.setBaseUrl(DGPL_CONFIG.LOCAL_BASE_URL);
+    const targetSelect = $("engine-target-select");
+    if (targetSelect) targetSelect.value = "local";
+    const localBtn = $("target-local-btn");
+    const cloudBtn = $("target-cloud-btn");
+    if (localBtn) localBtn.classList.add("active");
+    if (cloudBtn) cloudBtn.classList.remove("active");
+    const badge = $("brand-badge-text");
+    if (badge) {
+      badge.textContent = "DGPL Local";
+      badge.className = "brand-badge";
+    }
+    
+    const keyInput = $("dgpl-key-input");
+    const currentKey = (keyInput ? keyInput.value : "") || localStorage.getItem("dgpl_api_key") || "";
+    const effectiveKey = currentKey || "dgpl_adm_master_sovereign_2026";
+    if (keyInput) keyInput.value = effectiveKey;
+    
+    if (autoValidate) {
+      validateAndConnectKey(effectiveKey, true);
+    }
+  } else {
+    DGPL_CONFIG.setBaseUrl(DGPL_CONFIG.CLOUD_BASE_URL);
+    const targetSelect = $("engine-target-select");
+    if (targetSelect) targetSelect.value = "cloud";
+    const localBtn = $("target-local-btn");
+    const cloudBtn = $("target-cloud-btn");
+    if (localBtn) localBtn.classList.remove("active");
+    if (cloudBtn) cloudBtn.classList.add("active");
+    const badge = $("brand-badge-text");
+    if (badge) {
+      badge.textContent = "DGPL Cloud";
+      badge.className = "brand-badge cloud";
+    }
+    
+    const keyInput = $("dgpl-key-input");
+    const currentKey = (keyInput ? keyInput.value : "") || localStorage.getItem("dgpl_api_key") || "";
+    if (autoValidate) {
+      validateAndConnectKey(currentKey, true);
+    }
+  }
+}
+
+if ($("engine-target-select")) {
+  $("engine-target-select").onchange = (e) => setEngineTarget(e.target.value, true);
+}
+
+if ($("target-local-btn")) {
+  $("target-local-btn").onclick = () => setEngineTarget("local", true);
+}
+
+if ($("target-cloud-btn")) {
+  $("target-cloud-btn").onclick = () => setEngineTarget("cloud", true);
+}
+
 // API Key Dialog Event Listeners
 if ($("key-modal-btn")) {
   $("key-modal-btn").onclick = () => {
-    const currentKey = localStorage.getItem("dgpl_api_key") || "";
+    const currentKey = localStorage.getItem("dgpl_api_key") || (DGPL_CONFIG.isLocal() ? "dgpl_adm_master_sovereign_2026" : "");
     if ($("dgpl-key-input")) {
       $("dgpl-key-input").value = currentKey;
     }
@@ -1622,7 +1702,7 @@ if ($("key-modal-btn")) {
       updateModalBanner(
         "offline",
         "Offline Mode",
-        "Please enter an active DGPL API key to enable autonomous cloud driving.",
+        `Please enter an active DGPL API key to connect to ${DGPL_CONFIG.getEnvironmentLabel()}.`,
         "Awaiting Input",
         "badge-neutral"
       );
