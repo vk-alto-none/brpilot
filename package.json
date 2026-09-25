@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "lucide": "^0.577.0",
+    "onnxruntime-web": "^1.30.0",
     "three": "^0.183.0"
   },
   "devDependencies": {

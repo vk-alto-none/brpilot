@@ -44,6 +44,7 @@ import { prepareJevRequest, expandJevAnswers, decisionInterval } from "./jev-req
 import { THEMES } from "./world.js";
 import { candidateName, decisionControls, decisionSelection } from "./planning.js";
 import { DGPL_CONFIG } from "./config.js";
+import { localONNX } from "./local-onnx.js";
 import { clamp, nearestOnPath } from "./math.js";
 const icons = {
   Braces,
@@ -158,14 +159,15 @@ $("app").innerHTML = `
   </div>
   <div class="topbar-right">
     <div class="engine-switch-container">
-      <select id="engine-target-select" class="engine-target-select" aria-label="Engine Target" title="Switch between Local and Cloud Engine">
-        <option value="local" ${DGPL_CONFIG.isLocal() ? 'selected' : ''}>💻 DGPL Local (127.0.0.1:8000)</option>
-        <option value="cloud" ${!DGPL_CONFIG.isLocal() ? 'selected' : ''}>☁️ DGPL Cloud (br.durbhasigurukulam.com)</option>
+      <select id="engine-target-select" class="engine-target-select" aria-label="Engine Target" title="Switch between In-Browser ONNX, Local Rust, and Cloud Engine">
+        <option value="wasm" ${DGPL_CONFIG.getEngineMode() === 'wasm' ? 'selected' : ''}>⚡ In-Browser ONNX (WASM · Zero Latency)</option>
+        <option value="local" ${DGPL_CONFIG.getEngineMode() === 'local' ? 'selected' : ''}>💻 Local Rust Service (127.0.0.1:8000)</option>
+        <option value="cloud" ${DGPL_CONFIG.getEngineMode() === 'cloud' ? 'selected' : ''}>☁️ DGPL Cloud (br.durbhasigurukulam.com)</option>
       </select>
     </div>
     <button id="key-modal-btn" class="key-pill-btn" title="DGPL System-1 API Connection">
-      <span id="key-status-dot-pill" class="pill-dot pill-dot-offline"></span>
-      <span id="key-badge-text">🔒 Connect API Key</span>
+      <span id="key-status-dot-pill" class="pill-dot pill-dot-live"></span>
+      <span id="key-badge-text">⚡ ONNX WASM</span>
     </button>
     <a id="github-link" class="icon-btn" href="https://github.com/vk-alto-none/brpilot" target="_blank" rel="noopener noreferrer" aria-label="View BRPilot on GitHub" title="View on GitHub">${icon("github")}</a>
   </div>
@@ -194,18 +196,25 @@ $("app").innerHTML = `
       <div class="engine-selector-box">
         <label class="section-subhead">Inference Engine Target</label>
         <div class="target-toggle-group">
-          <button type="button" id="target-local-btn" class="target-btn ${DGPL_CONFIG.isLocal() ? 'active' : ''}" data-target="local">
+          <button type="button" id="target-wasm-btn" class="target-btn ${DGPL_CONFIG.getEngineMode() === 'wasm' ? 'active' : ''}" data-target="wasm">
+            <span class="target-icon">⚡</span>
+            <div>
+              <strong>In-Browser ONNX</strong>
+              <small>Direct WASM (Zero-Lag)</small>
+            </div>
+          </button>
+          <button type="button" id="target-local-btn" class="target-btn ${DGPL_CONFIG.getEngineMode() === 'local' ? 'active' : ''}" data-target="local">
             <span class="target-icon">💻</span>
             <div>
-              <strong>DGPL Local Engine</strong>
+              <strong>Local Rust Engine</strong>
               <small>http://127.0.0.1:8000</small>
             </div>
           </button>
-          <button type="button" id="target-cloud-btn" class="target-btn ${!DGPL_CONFIG.isLocal() ? 'active' : ''}" data-target="cloud">
+          <button type="button" id="target-cloud-btn" class="target-btn ${DGPL_CONFIG.getEngineMode() === 'cloud' ? 'active' : ''}" data-target="cloud">
             <span class="target-icon">☁️</span>
             <div>
-              <strong>DGPL Cloud Engine</strong>
-              <small>https://br.durbhasigurukulam.com</small>
+              <strong>DGPL Cloud</strong>
+              <small>br.durbhasigurukulam.com</small>
             </div>
           </button>
         </div>
@@ -213,11 +222,11 @@ $("app").innerHTML = `
       
       <div class="key-input-container">
         <div class="input-label-row">
-          <label for="dgpl-key-input">Your DGPL API Key</label>
+          <label for="dgpl-key-input">Your DGPL API Key (Cloud / Service)</label>
           <span id="key-validation-badge" class="badge-neutral">Awaiting Input</span>
         </div>
         <div class="input-wrapper">
-          <input type="text" id="dgpl-key-input" placeholder="dgpl_adm_... or dgpl_live_..." autocomplete="off" spellcheck="false" />
+          <input type="text" id="dgpl-key-input" placeholder="dgpl_adm_... or dgpl_live_... (Not needed for In-Browser ONNX)" autocomplete="off" spellcheck="false" />
         </div>
       </div>
       
@@ -392,18 +401,22 @@ function syncPilot() {
 function setPilot(on) {
   if (loading) return;
   touch.reset();
+  if (DGPL_CONFIG.isWasm()) {
+    isKeyValid = true;
+    configured = true;
+  }
   let apiKey = (localStorage.getItem("dgpl_api_key") || "").trim();
-  if (!apiKey && DGPL_CONFIG.isLocal()) {
+  if (!apiKey && DGPL_CONFIG.getEngineMode() === "local") {
     apiKey = "dgpl_adm_master_sovereign_2026";
     localStorage.setItem("dgpl_api_key", apiKey);
   }
-  if (on && !apiKey) {
+  if (on && !apiKey && !DGPL_CONFIG.isWasm()) {
     toast(`🔒 API Key Required. Connect your key to engage ${DGPL_CONFIG.getEnvironmentLabel()}.`, "error");
     $("key-dialog").showModal();
     return;
   }
   if (on && !configured) {
-    toast(`⚠️ ${DGPL_CONFIG.getEnvironmentLabel()} is unreachable (${DGPL_CONFIG.getBaseUrl()}). Please verify engine status.`, "error");
+    toast(`⚠️ ${DGPL_CONFIG.getEnvironmentLabel()} is unreachable. Please verify engine status.`, "error");
     $("key-dialog").showModal();
     return;
   }
@@ -1035,7 +1048,7 @@ async function decide() {
     let cloudSuccess = false;
     let transportType = "ws";
 
-    if (!apiKey) {
+    if (!apiKey && !DGPL_CONFIG.isWasm()) {
       setPilot(false);
       const pilotStateEl = $("pilot-state");
       if (pilotStateEl) pilotStateEl.textContent = "🔒 API Key Required";
@@ -1047,25 +1060,45 @@ async function decide() {
     const turnDist = typeof state.turn === "object" ? (state.turn?.in_m ?? 0) : 0;
     const stateDesc = `batch_${state.batch_id}_speed_${state.speed_mps.toFixed(1)}_turn_${turnDir}_dist_${turnDist}m`;
 
-    // 1. Primary Ultra-fast WebSocket Stream (Sub-5ms overhead)
-    try {
-      const wsResp = await sendDGPLDecisionWS({
-        type: "decision",
-        task: "choice",
-        state: stateDesc,
-        candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
-      }, 2500);
-
-      if (wsResp && wsResp.status === "success") {
-        const sel = wsResp.decision?.selected;
-        if (sel && candidateIds.includes(sel)) {
-          selectedChoice = sel;
+    // 0. Primary Direct In-Browser WebAssembly ONNX Execution (0ms Network Latency)
+    if (DGPL_CONFIG.isWasm()) {
+      try {
+        const wasmResp = await localONNX.evaluateDecision("choice", stateDesc, candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]);
+        if (wasmResp && wasmResp.status === "success") {
+          const sel = wasmResp.decision?.selected;
+          if (sel && candidateIds.includes(sel)) {
+            selectedChoice = sel;
+          }
+          dist = wasmResp.decision?.distribution || {};
+          cloudSuccess = true;
+          transportType = "wasm";
         }
-        dist = wsResp.decision?.distribution || {};
-        cloudSuccess = true;
-        transportType = "ws";
+      } catch (wasmErr) {
+        console.warn("[Local ONNX WASM] Decision tick error:", wasmErr);
       }
-    } catch (wsErr) {}
+    }
+
+    // 1. Ultra-fast WebSocket Stream (Sub-5ms overhead)
+    if (!cloudSuccess) {
+      try {
+        const wsResp = await sendDGPLDecisionWS({
+          type: "decision",
+          task: "choice",
+          state: stateDesc,
+          candidates: candidateIds.length > 0 ? candidateIds : ["v0", "v1", "v2", "v3"]
+        }, 2500);
+
+        if (wsResp && wsResp.status === "success") {
+          const sel = wsResp.decision?.selected;
+          if (sel && candidateIds.includes(sel)) {
+            selectedChoice = sel;
+          }
+          dist = wsResp.decision?.distribution || {};
+          cloudSuccess = true;
+          transportType = "ws";
+        }
+      } catch (wsErr) {}
+    }
 
     // 2. High-reliability REST Direct Fallback (/api/v1/systemone)
     if (!cloudSuccess) {
@@ -1529,6 +1562,22 @@ function updateTopbarPill(text, dotClass) {
 }
 
 async function validateAndConnectKey(rawKey, notify = false) {
+  if (DGPL_CONFIG.isWasm()) {
+    isKeyValid = true;
+    configured = true;
+    updateTopbarPill("⚡ ONNX WASM (0ms)", "pill-dot-live");
+    updateModalBanner(
+      "live",
+      "⚡ In-Browser ONNX Engine Ready",
+      "Direct WebAssembly Execution · Zero HTTP Network Lag · In-Memory 48.8M DLM",
+      "Valid (In-Browser)",
+      "badge-valid"
+    );
+    localONNX.init();
+    if (notify) toast("⚡ In-Browser ONNX Neural Engine Active (WASM Zero-Latency)!", "info");
+    return { valid: true, latency: 0, tier: "in_browser_wasm" };
+  }
+
   const key = (rawKey || "").trim();
   
   if (!key) {
@@ -1638,52 +1687,51 @@ async function validateAndConnectKey(rawKey, notify = false) {
 
 // Engine Target Switching Logic
 function setEngineTarget(target, autoValidate = true) {
-  if (target === "local") {
-    DGPL_CONFIG.setBaseUrl(DGPL_CONFIG.LOCAL_BASE_URL);
-    const targetSelect = $("engine-target-select");
-    if (targetSelect) targetSelect.value = "local";
-    const localBtn = $("target-local-btn");
-    const cloudBtn = $("target-cloud-btn");
-    if (localBtn) localBtn.classList.add("active");
-    if (cloudBtn) cloudBtn.classList.remove("active");
-    const badge = $("brand-badge-text");
-    if (badge) {
+  DGPL_CONFIG.setEngineMode(target);
+  const targetSelect = $("engine-target-select");
+  if (targetSelect) targetSelect.value = target;
+
+  const wasmBtn = $("target-wasm-btn");
+  const localBtn = $("target-local-btn");
+  const cloudBtn = $("target-cloud-btn");
+  if (wasmBtn) wasmBtn.classList.toggle("active", target === "wasm");
+  if (localBtn) localBtn.classList.toggle("active", target === "local");
+  if (cloudBtn) cloudBtn.classList.toggle("active", target === "cloud");
+
+  const badge = $("brand-badge-text");
+  if (badge) {
+    if (target === "wasm") {
+      badge.textContent = "ONNX WASM";
+      badge.className = "brand-badge";
+    } else if (target === "local") {
       badge.textContent = "DGPL Local";
       badge.className = "brand-badge";
-    }
-    
-    const keyInput = $("dgpl-key-input");
-    const currentKey = (keyInput ? keyInput.value : "") || localStorage.getItem("dgpl_api_key") || "";
-    const effectiveKey = currentKey || "dgpl_adm_master_sovereign_2026";
-    if (keyInput) keyInput.value = effectiveKey;
-    
-    if (autoValidate) {
-      validateAndConnectKey(effectiveKey, true);
-    }
-  } else {
-    DGPL_CONFIG.setBaseUrl(DGPL_CONFIG.CLOUD_BASE_URL);
-    const targetSelect = $("engine-target-select");
-    if (targetSelect) targetSelect.value = "cloud";
-    const localBtn = $("target-local-btn");
-    const cloudBtn = $("target-cloud-btn");
-    if (localBtn) localBtn.classList.remove("active");
-    if (cloudBtn) cloudBtn.classList.add("active");
-    const badge = $("brand-badge-text");
-    if (badge) {
+    } else {
       badge.textContent = "DGPL Cloud";
       badge.className = "brand-badge cloud";
     }
-    
+  }
+
+  if (target === "wasm") {
+    validateAndConnectKey("", autoValidate);
+  } else if (target === "local") {
+    const keyInput = $("dgpl-key-input");
+    const currentKey = (keyInput ? keyInput.value : "") || localStorage.getItem("dgpl_api_key") || "dgpl_adm_master_sovereign_2026";
+    if (keyInput) keyInput.value = currentKey;
+    if (autoValidate) validateAndConnectKey(currentKey, true);
+  } else {
     const keyInput = $("dgpl-key-input");
     const currentKey = (keyInput ? keyInput.value : "") || localStorage.getItem("dgpl_api_key") || "";
-    if (autoValidate) {
-      validateAndConnectKey(currentKey, true);
-    }
+    if (autoValidate) validateAndConnectKey(currentKey, true);
   }
 }
 
 if ($("engine-target-select")) {
   $("engine-target-select").onchange = (e) => setEngineTarget(e.target.value, true);
+}
+
+if ($("target-wasm-btn")) {
+  $("target-wasm-btn").onclick = () => setEngineTarget("wasm", true);
 }
 
 if ($("target-local-btn")) {
